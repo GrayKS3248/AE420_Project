@@ -25,8 +25,8 @@ thread_crest = 0.0;
 
 % Mesh
 num_height = 20;
-num_ring = 2;
-num_theta = 5;
+num_ring = 2;  %% MUST STAY EXACTLY 2. WILL FIX LATER
+num_theta = 4;
 
 
 %% Compile parameters
@@ -125,48 +125,45 @@ num_nodes = length(NODES);
 element = 1;
 
 % Tip
-for i = 1:num_theta
-
-    % Outer
-    if i~=num_theta
-        ELEMENTS(element,:) = [1, i+1, i+2, i+1+num_theta];
-        element = element + 1;
-        ELEMENTS(element,:) = [1, i+1+num_theta, i+2+num_theta, i+2+2*num_theta];
-        element = element + 1;
-        ELEMENTS(element,:) = [1, i+1+num_theta, i+2+num_theta, i+2+2*num_theta];
-        element = element + 1;
-    else
-        ELEMENTS(element,:) = [1, i+1, 2,   2*i+1];
-        element = element + 1;
-        ELEMENTS(element,:) = [1, 2*i+1, i+2, 2*i+2];
-        element = element + 1;
-        ELEMENTS(element,:) = [1, 2*i+2, 2*i+3, 3*i+2];
-        element = element + 1;
-    end
-
-
-    % Inner
-    if i==1
-        ELEMENTS(element,:) = [1, i+1, i+2*num_theta, i+1+num_theta];
-        element = element + 1;
-        ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
-        element = element + 1;
-    else
-        ELEMENTS(element,:) = [1, i+1, i+num_theta, i+1+num_theta];
-        element = element + 1;
-        if i~=num_theta
-            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
-            element = element + 1;
+for i =1:num_ring
+    for j = 1:num_theta
+        
+        % Inward pointing elements
+        node_1 = 1 + j + (i-1)*num_theta;
+        if j ~= num_theta
+            node_2 = node_1 + 1;
         else
-            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+num_theta];
-            element = element + 1;
+            node_2 = node_1 + 1 - num_theta;
         end
-    end
+        if mod(i,2) == 0
+            node_3 = node_2 + num_theta;
+        else
+            node_3 = node_1 + num_theta;
+        end
+        ELEMENTS(element,:) = [1,node_1,node_2,node_3];
+        element = element + 1;
+        
+        % Outward pointing elements
+        node_4 = node_1;
+        if j==1
+            node_5 = node_3 - 1 + num_theta;
+        else
+            node_5 = node_3 - 1;
+        end
+        node_6 = node_3;
 
+        ELEMENTS(element,:) = [1,node_4,node_5,node_6];
+        element = element + 1;
+        
+    end
 end
 
 % Body
-
+for i = 1:num_theta
+    
+    
+    
+end
 
 % Head taper
 
@@ -174,9 +171,12 @@ end
 
 %% Visualization
 %scatter3(X,Y,Z,'.','k');
-tetramesh(ELEMENTS, NODES);
+for i=1:length(ELEMENTS)
+    figure(i)
+    tetramesh(ELEMENTS(1:i,:), NODES);
+end
 axis equal;
-view(30,15);
+%view(30,15);
 
 %% Define body geometry
 function [r, node_type] = get_r(theta,h,arg)

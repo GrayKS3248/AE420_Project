@@ -85,3 +85,41 @@ for i = 1:length(nodes_ext)
      nodes_ext_pol(i,:) = [r, rad2deg(theta), h];
      C_ext(i) = type_ext(i)/8.0;
 end
+
+
+%% TIP 3D ELEMENTS
+
+    % Outer
+    if i~=num_theta
+        ELEMENTS(element,:) = [1, i+1, i+2, i+1+num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+num_theta, i+2+num_theta, i+2+2*num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+2*num_theta, i+2+2*num_theta, 3*num_theta+2];
+        element = element + 1;
+    else
+        ELEMENTS(element,:) = [1, i+1, 2,   2*i+1];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, 2*i+1, i+2, 2*i+2];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, 2*i+2, 3*i+1, 3*i+2];
+        element = element + 1;
+    end
+    
+    % Inner
+    if i==1
+        ELEMENTS(element,:) = [1, i+1, i+2*num_theta, i+1+num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
+        element = element + 1;
+    else
+        ELEMENTS(element,:) = [1, i+1, i+num_theta, i+1+num_theta];
+        element = element + 1;
+        if i~=num_theta
+            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
+            element = element + 1;
+        else
+            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+num_theta];
+            element = element + 1;
+        end
+    end

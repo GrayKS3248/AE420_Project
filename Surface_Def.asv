@@ -24,8 +24,8 @@ thread_width = 0.0;
 thread_crest = 0.0;
 
 % Mesh
-num_height = 30;
-num_ring = 2; 
+num_height = 10;
+num_ring = 3; 
 num_theta = 6;
 
 
@@ -161,14 +161,14 @@ for i = 1:num_ring
             node_7 = node_5;
             node_8 = node_6;
             ELEMENTS(element,:) = [1,node_7,node_8,(num_ring+1)*num_theta+2];
-            element = element + 1;
+%             element = element + 1;
         end
         
     end
 end
 
 % Body and head taper
-for k = 1:num_height-3
+for k = num_height-3:num_height-3
     for i = 1:num_ring
         
         % Calculate relevant element indices
@@ -189,8 +189,8 @@ for k = 1:num_height-3
                 node_3 = node_3 - num_theta;
             end
             node_4 = ele_h_2 + j - 1;
-            ELEMENTS(element,:) = [node_1,node_2,node_3,node_4];
-            element = element + 1;
+%             ELEMENTS(element,:) = [node_1,node_2,node_3,node_4];
+%             element = element + 1;
 
             % Downward pointing elements of inward pointing origin
             node_5 = node_2;
@@ -212,8 +212,8 @@ for k = 1:num_height-3
             node_10 = node_3;
             node_11 = node_8;
             node_12 = node_4;
-            ELEMENTS(element,:) = [node_9,node_10,node_11,node_12];
-            element = element + 1;
+%             ELEMENTS(element,:) = [node_9,node_10,node_11,node_12];
+%             element = element + 1;
 
             % Upward pointing elements of outward pointing origin
             node_13 = node_1;
@@ -226,8 +226,8 @@ for k = 1:num_height-3
             else
                 node_16 = node_8 - 1;
             end
-            ELEMENTS(element,:) = [node_13,node_14,node_15,node_16];
-            element = element + 1;
+%             ELEMENTS(element,:) = [node_13,node_14,node_15,node_16];
+%             element = element + 1;
             
             % Downward pointing elements of outward pointing origin
             node_17 = node_13;
@@ -240,8 +240,8 @@ for k = 1:num_height-3
             else
                 node_20 = node_14 - 1;
             end
-            ELEMENTS(element,:) = [node_17,node_18,node_19,node_20];
-            element = element + 1;
+%             ELEMENTS(element,:) = [node_17,node_18,node_19,node_20];
+%             element = element + 1;
             
             % Inner elements of outward pointing origin
             node_21 = node_14;
@@ -252,8 +252,8 @@ for k = 1:num_height-3
             else
                 node_24 = node_15 + num_theta + mod(i+1,2);
             end
-            ELEMENTS(element,:) = [node_21,node_22,node_23,node_24];
-            element = element + 1;
+%             ELEMENTS(element,:) = [node_21,node_22,node_23,node_24];
+%             element = element + 1;
             
             if i==num_ring
                 %Core elements 1
@@ -261,46 +261,42 @@ for k = 1:num_height-3
                 node_26 = node_19;
                 node_27 = node_20;
                 node_28 = ele_h_1 + 2*num_theta;
-                ELEMENTS(element,:) = [node_25,node_26,node_27,node_28];
-                element = element + 1;
+%                 ELEMENTS(element,:) = [node_25,node_26,node_27,node_28];
+%                 element = element + 1;
 
                 %Core elements 2
                 node_29 = node_25;
                 node_30 = node_26;
                 node_31 = node_24;
                 node_32 = ele_h_1 + 2*num_theta;
-                ELEMENTS(element,:) = [node_29,node_30,node_31,node_32];
-                element = element + 1;
+%                 ELEMENTS(element,:) = [node_29,node_30,node_31,node_32];
+%                 element = element + 1;
                 
                 %Core elements 3
                 node_33 = ele_h_2 + 2*num_theta;
                 node_34 = node_30;
                 node_35 = node_31;
                 node_36 = node_32;
-                ELEMENTS(element,:) = [node_33,node_34,node_35,node_36];
-                element = element + 1;
+%                 ELEMENTS(element,:) = [node_33,node_34,node_35,node_36];
+%                 element = element + 1;
             end
             
             % Head taper
             if k==num_height-3
                 ELEMENTS(element,:) = [length(NODES),node_6,node_7,node_8];
                 element = element + 1;
-                ELEMENTS(element,:) = [length(NODES),node_22,node_23,node_24];
-                element = element + 1;
-                if i==num_ring
-                    ELEMENTS(element,:) = [length(NODES),node_33,node_34,node_35];
-                    element = element + 1;
-                end
             end
 
         end
     end
 end
-ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
+
 
 %% Visualization
 scatter3(X,Y,Z,'.','k');
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
+hold on;
+tetramesh(ELEMENTS, NODES);
+hold off;
 axis equal;
 view(30,30);
 

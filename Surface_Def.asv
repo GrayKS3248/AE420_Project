@@ -1,6 +1,6 @@
 %% Setup
 close all;
-clear all
+clear all;
 
 
 %% Parameters
@@ -74,9 +74,18 @@ for height = height_list
             if radius ~= 1.0 && radius ~= 0.0
                 [~,inner_ring_number] = min(abs(radius_list-radius));
                 inner_ring_number = inner_ring_number - 1;
-                t = inner_ring_number*(theta+pi/num_theta);
+                if mod(inner_ring_number,2)~=0
+                    t = theta+pi/num_theta;
+                else
+                    t = theta;
+                end
             else
                 t = theta;
+            end
+            if t > 2.0*pi
+                t = t - 2.0*pi;
+            elseif t < 0.0
+                t = t + 2.0*pi;
             end
             [x,y,z] = pol2cart(t, r, height);
             X(node) = x;
@@ -99,24 +108,73 @@ for height = height_list
 end
 
 % Remove duplicate nodes
-nodes = [X Y Z];
-[nodes, ia] = unique(nodes,'rows','stable');
-X = nodes(:,1);
-Y = nodes(:,2);
-Z = nodes(:,3);
+NODES = [X Y Z];
+[NODES, ia] = unique(NODES,'rows','stable');
+X = NODES(:,1);
+Y = NODES(:,2);
+Z = NODES(:,3);
 R = R(ia);
 T = T(ia);
 H = H(ia);
+CYL_NODES = [R T H];
 TYPE = TYPE(ia);
-num_nodes = length(nodes);
+num_nodes = length(NODES);
 
 
-%% Triangulation
+%% Element generation
+element = 1;
+
+% Tip
+for i = 1:num_theta
+
+    % Outer
+    if i~=num_theta
+        ELEMENTS(element,:) = [1, i+1, i+2, i+1+num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+num_theta, i+2+num_theta, i+2+2*num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+num_theta, i+2+num_theta, i+2+2*num_theta];
+        element = element + 1;
+    else
+        ELEMENTS(element,:) = [1, i+1, 2,   2*i+1];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, 2*i+1, i+2, 2*i+2];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, 2*i+2, 2*i+3, 3*i+2];
+        element = element + 1;
+    end
+
+
+    % Inner
+    if i==1
+        ELEMENTS(element,:) = [1, i+1, i+2*num_theta, i+1+num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
+        element = element + 1;
+    else
+        ELEMENTS(element,:) = [1, i+1, i+num_theta, i+1+num_theta];
+        element = element + 1;
+        if i~=num_theta
+            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
+            element = element + 1;
+        else
+            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+num_theta];
+            element = element + 1;
+        end
+    end
+
+end
+
+% Body
+
+
+% Head taper
 
 
 
 %% Visualization
-scatter3(X,Y,Z,'.','k');
+%scatter3(X,Y,Z,'.','k');
+tetramesh(ELEMENTS, NODES);
 axis equal;
 view(30,15);
 

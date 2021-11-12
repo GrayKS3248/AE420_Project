@@ -25,8 +25,8 @@ thread_crest = 0.0;
 
 % Mesh
 num_height = 20;
-num_ring = 2;
-num_theta = 5;
+num_ring = 2;  %% MUST STAY EXACTLY 2. WILL FIX LATER
+num_theta = 50;
 
 
 %% Compile parameters
@@ -74,9 +74,18 @@ for height = height_list
             if radius ~= 1.0 && radius ~= 0.0
                 [~,inner_ring_number] = min(abs(radius_list-radius));
                 inner_ring_number = inner_ring_number - 1;
-                t = inner_ring_number*(theta+pi/num_theta);
+                if mod(inner_ring_number,2)~=0
+                    t = theta+pi/num_theta;
+                else
+                    t = theta;
+                end
             else
                 t = theta;
+            end
+            if t > 2.0*pi
+                t = t - 2.0*pi;
+            elseif t < 0.0
+                t = t + 2.0*pi;
             end
             [x,y,z] = pol2cart(t, r, height);
             X(node) = x;
@@ -107,12 +116,61 @@ Z = NODES(:,3);
 R = R(ia);
 T = T(ia);
 H = H(ia);
+CYL_NODES = [R T H];
 TYPE = TYPE(ia);
 num_nodes = length(NODES);
 
 
 %% Element generation
-ELEMENTS = [1,2,3,4];
+element = 1;
+
+% Tip
+for i = 1:num_theta
+    % Outer
+    if i~=num_theta
+        ELEMENTS(element,:) = [1, i+1, i+2, i+1+num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+num_theta, i+2+num_theta, i+2+2*num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+2*num_theta, i+2+2*num_theta, 3*num_theta+2];
+        element = element + 1;
+    else
+        ELEMENTS(element,:) = [1, i+1, 2,   2*i+1];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, 2*i+1, i+2, 2*i+2];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, 2*i+2, 3*i+1, 3*i+2];
+        element = element + 1;
+    end
+    % Inner
+    if i==1
+        ELEMENTS(element,:) = [1, i+1, i+2*num_theta, i+1+num_theta];
+        element = element + 1;
+        ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
+        element = element + 1;
+    else
+        ELEMENTS(element,:) = [1, i+1, i+num_theta, i+1+num_theta];
+        element = element + 1;
+        if i~=num_theta
+            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+2*num_theta];
+            element = element + 1;
+        else
+            ELEMENTS(element,:) = [1, i+1+num_theta, i+1+2*num_theta, i+2+num_theta];
+            element = element + 1;
+        end
+    end
+
+end
+
+% Body
+
+
+% Head taper
+
+
+% Sort elements
+[~,ia] = sort(sum(ELEMENTS,2));
+ELEMENTS = ELEMENTS(ia,:);
 
 
 %% Visualization

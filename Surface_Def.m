@@ -1,6 +1,6 @@
 %% Setup
-close all 
-clear all
+close all;
+clear all;
 
 
 %% Parameters
@@ -26,7 +26,7 @@ thread_crest = 0.0;
 % Mesh
 num_height = 20;
 num_ring = 2;
-num_theta = 10;
+num_theta = 5;
 
 
 %% Compile parameters
@@ -59,6 +59,9 @@ theta_list = theta_list(1:end-1);
 X = zeros(num_nodes, 1);
 Y = zeros(num_nodes, 1);
 Z = zeros(num_nodes, 1);
+R = zeros(num_nodes, 1);
+T = zeros(num_nodes, 1);
+H = zeros(num_nodes, 1);
 TYPE = zeros(num_nodes, 1);
 node = 1;
 for height = height_list
@@ -68,10 +71,20 @@ for height = height_list
             % Get radius, convert to cartesian
             [r, node_type] = get_r(theta,height,arg);
             r = r * radius;
-            [x,y,z] = pol2cart(theta, r, height);
+            if radius ~= 1.0 && radius ~= 0.0
+                [~,inner_ring_number] = min(abs(radius_list-radius));
+                inner_ring_number = inner_ring_number - 1;
+                t = inner_ring_number*(theta+pi/num_theta);
+            else
+                t = theta;
+            end
+            [x,y,z] = pol2cart(t, r, height);
             X(node) = x;
             Y(node) = y;
             Z(node) = z;
+            R(node) = r;
+            T(node) = t;
+            H(node) = height;
             
             % Assign type to surface nodes only
             if radius == 1.0
@@ -84,12 +97,27 @@ for height = height_list
         end
     end
 end
-nodes = [X Y Z];
-[nodes, ia, ic] = unique(nodes,'rows','stable');
+
+% Remove duplicate nodes
+NODES = [X Y Z];
+[NODES, ia] = unique(NODES,'rows','stable');
+X = NODES(:,1);
+Y = NODES(:,2);
+Z = NODES(:,3);
+R = R(ia);
+T = T(ia);
+H = H(ia);
+TYPE = TYPE(ia);
+num_nodes = length(NODES);
+
+
+%% Element generation
+ELEMENTS = [1,2,3,4];
 
 
 %% Visualization
-scatter3(X,Y,Z,'.','k');
+%scatter3(X,Y,Z,'.','k');
+tetramesh(ELEMENTS, NODES);
 axis equal;
 view(30,15);
 
@@ -113,7 +141,7 @@ function [r, node_type] = get_r(theta,h,arg)
     % Head
     elseif h>=shank_transition_2_head && h<=head_2_head_taper
         node_type = 7;
-        r = rh;
+        r = arg.rh;
         
     % Shank transition
     elseif h>=shank_2_shank_transition && h<=shank_transition_2_head

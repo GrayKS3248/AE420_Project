@@ -10,9 +10,8 @@ r_shank = 3.0;
 r_body = 2.5;
 
 % Lengths
-l_head_taper = 0.25;
 l_head = 3.75;
-l_shank_transition = 0.25;
+l_shank_transition = 0.50;
 l_shank = 3.0;
 l_body = 42.0;
 l_tip = 5.0;
@@ -20,8 +19,8 @@ l_tip = 5.0;
 % Thread
 thread_number = 0.5;
 thread_depth = 1.0;
-thread_width = 1.0;
-thread_crest = 0.25;
+thread_width = 1.25;
+thread_crest = 0.5;
 
 % Mesh
 num_height = 300;
@@ -33,7 +32,6 @@ num_theta = 30;
 arg = struct('rh',r_head,...
     'rs',r_shank,...
     'rb',r_body,...
-    'lht',l_head_taper,...
     'lh',l_head,...
     'lst',l_shank_transition,...
     'ls',l_shank,...
@@ -47,7 +45,7 @@ arg = struct('rh',r_head,...
 
 %% Generate nodes
 % Calculate general parameters
-total_length = arg.lt + arg.lb + arg.ls + arg.lst + arg.lh + arg.lht;
+total_length = arg.lt + arg.lb + arg.ls + arg.lst + arg.lh;
 num_nodes = num_height*num_ring*num_theta;
 
 % Calculate height, ring, and theta space
@@ -168,7 +166,7 @@ for i = 1:num_ring
 end
 
 % Body and head taper
-for k = 1:num_height-3
+for k = 1:num_height-2
     for i = 1:num_ring
         
         % Calculate relevant element indices
@@ -280,27 +278,16 @@ for k = 1:num_height-3
                 ELEMENTS(element,:) = [node_33,node_34,node_35,node_36];
                 element = element + 1;
             end
-            
-            % Head taper
-            if k==num_height-3
-                ELEMENTS(element,:) = [length(NODES),node_6,node_7,node_8];
-                element = element + 1;
-                ELEMENTS(element,:) = [length(NODES),node_22,node_23,node_24];
-                element = element + 1;
-                if i==num_ring
-                    ELEMENTS(element,:) = [length(NODES),node_33,node_34,node_35];
-                    element = element + 1;
-                end
-            end
-
         end
     end
 end
 ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
 
 %% Visualization
-%scatter3(X,Y,Z,'.','k');
+scatter3(X,Y,Z,'.','k');
+hold on
 trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
+hold off
 axis equal;
 view(30,30);
 
@@ -312,17 +299,10 @@ function [r, node_type] = get_r(theta,h,arg)
     body_2_shank = tip_2_body + arg.lb;
     shank_2_shank_transition = body_2_shank + arg.ls;
     shank_transition_2_head = shank_2_shank_transition + arg.lst;
-    head_2_head_taper = shank_transition_2_head + arg.lh;
-    total_length = head_2_head_taper + arg.lht;
-
-    % Head taper
-    if h>=head_2_head_taper && h<=total_length
-        node_type = 8;
-        loc_in_section = (h - head_2_head_taper) / (total_length - head_2_head_taper);
-        r = arg.rh*(1.0-loc_in_section);
+    total_length = shank_transition_2_head + arg.lh;
         
     % Head
-    elseif h>=shank_transition_2_head && h<=head_2_head_taper
+    if h>=shank_transition_2_head && h<=total_length
         node_type = 7;
         r = arg.rh;
         

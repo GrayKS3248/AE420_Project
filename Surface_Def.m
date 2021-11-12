@@ -24,9 +24,9 @@ thread_width = 0.0;
 thread_crest = 0.0;
 
 % Mesh
-num_height = 160;
-num_ring = 4; 
-num_theta = 16;
+num_height = 10;
+num_ring = 3; 
+num_theta = 6;
 
 
 %% Compile parameters
@@ -260,20 +260,20 @@ for k = 1:num_height-3
                 node_25 = node_18;
                 node_26 = node_19;
                 node_27 = node_20;
-                node_28 = ele_h_1 + num_ring*num_theta;
+                node_28 = ele_h_1 + 2*num_theta;
                 ELEMENTS(element,:) = [node_25,node_26,node_27,node_28];
                 element = element + 1;
 
                 %Core elements 2
-                node_29 = node_18;
-                node_30 = node_19;
+                node_29 = node_25;
+                node_30 = node_26;
                 node_31 = node_24;
-                node_32 = ele_h_1 + num_ring*num_theta;
+                node_32 = ele_h_1 + 2*num_theta;
                 ELEMENTS(element,:) = [node_29,node_30,node_31,node_32];
                 element = element + 1;
                 
                 %Core elements 3
-                node_33 = ele_h_2 + num_ring*num_theta;
+                node_33 = ele_h_2 + 2*num_theta;
                 node_34 = node_30;
                 node_35 = node_31;
                 node_36 = node_32;
@@ -290,8 +290,10 @@ end
 
 
 %% Visualization
-%scatter3(X,Y,Z,'.','k');
+scatter3(X,Y,Z,'.','k');
+hold on;
 tetramesh(ELEMENTS, NODES);
+hold off;
 axis equal;
 view(30,30);
 

@@ -5,28 +5,28 @@ clear all;
 
 %% Parameters
 % Radii
-r_head = 6.0;
-r_shank = 2.5;
-r_body = 2.0;
+r_head = 6.5;
+r_shank = 3.0;
+r_body = 2.5;
 
 % Lengths
-l_head_taper = 1.0;
-l_head = 4.0;
-l_shank_transition = 1.0;
-l_shank = 4.0;
-l_body = 40.0;
+l_head_taper = 0.25;
+l_head = 3.75;
+l_shank_transition = 0.25;
+l_shank = 3.0;
+l_body = 42.0;
 l_tip = 5.0;
 
 % Thread
-thread_number = 0.0;
-thread_depth = 0.0;
-thread_width = 0.0;
-thread_crest = 0.0;
+thread_number = 0.5;
+thread_depth = 1.0;
+thread_width = 1.0;
+thread_crest = 0.25;
 
 % Mesh
-num_height = 30;
+num_height = 300;
 num_ring = 2; 
-num_theta = 6;
+num_theta = 30;
 
 
 %% Compile parameters
@@ -299,7 +299,7 @@ end
 ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
 
 %% Visualization
-scatter3(X,Y,Z,'.','k');
+%scatter3(X,Y,Z,'.','k');
 trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
 axis equal;
 view(30,30);
@@ -359,6 +359,36 @@ end
 
 %% Define thread geometry
 function [thread_height, node_type] = get_thread_height(theta,h,arg)
-    thread_height = 0.0;
-    node_type = 0;
+
+    % Calculate parameters
+    nearest_thread = round( (2.0*pi*h*arg.tn - theta) / (2.0*pi) );
+    mid_height = theta/(2.0*pi*arg.tn) + nearest_thread/arg.tn;
+    min_height = mid_height - 0.5*arg.tw;
+    max_height = mid_height + 0.5*arg.tw;
+    crest_min_height = mid_height - 0.5*arg.tc;
+    crest_max_height = mid_height + 0.5*arg.tc;
+    
+    % Approach
+    if h>=min_height && h<crest_min_height
+        node_type = 2;
+        loc_in_section = (h - min_height) / (crest_min_height - min_height);
+        thread_height = arg.td*loc_in_section;
+    
+    % Crest
+    elseif h>=crest_min_height && h<=crest_max_height
+        node_type = 3;
+        thread_height = arg.td;
+        
+    
+    % Receeding
+    elseif h>crest_max_height && h<=max_height
+        node_type = 4;
+        loc_in_section = (h - crest_max_height) / (max_height - crest_max_height);
+        thread_height = arg.td*(1.0-loc_in_section);
+    
+    % Body
+    else
+        node_type = 1;
+        thread_height = 0.0;
+    end
 end

@@ -286,14 +286,18 @@ end
 %% Post-Process elements 
 num_elements = length(ELEMENTS);
 ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
-[ELEMENT_CIRCUMCENTER, ELEMENT_CIRCUMRADIUS] = circumcenter(ELEMENT_TRIANGULATION);
+ELEMENT_CIRCUMCENTER = circumcenter(ELEMENT_TRIANGULATION);
 ELEMENT_VOLUME = zeros(num_elements, 1);
+ELEMENT_CIRCUMRADIUS = zeros(num_elements, 1);
 ELEMENT_INRADIUS = zeros(num_elements, 1);
 for i = 1:num_elements
     % Volume calculation
     ele_node_matrix = [X(ELEMENTS(i,:)), Y(ELEMENTS(i,:)), Z(ELEMENTS(i,:))];
     ele_volume_matrix  = [ele_node_matrix(1,:) - ele_node_matrix(4,:); ele_node_matrix(2,:) - ele_node_matrix(4,:); ele_node_matrix(3,:) - ele_node_matrix(4,:)];
     ELEMENT_VOLUME(i) = abs(det(ele_volume_matrix)) / 6.0;
+    
+    % Circumradius calculation
+    ELEMENT_CIRCUMRADIUS(i) = norm(ELEMENT_CIRCUMCENTER(i,:) - ele_node_matrix(1,:));
 end
 
 

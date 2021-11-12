@@ -24,9 +24,9 @@ thread_width = 0.0;
 thread_crest = 0.0;
 
 % Mesh
-num_height = 20;
-num_ring = 2;  %% MUST STAY EXACTLY 2. WILL FIX LATER
-num_theta = 4;
+num_height = 10;
+num_ring = 2; 
+num_theta = 5;
 
 
 %% Compile parameters
@@ -125,7 +125,7 @@ num_nodes = length(NODES);
 element = 1;
 
 % Tip
-for i =1:num_ring
+for i = 1:num_ring
     for j = 1:num_theta
         
         % Inward pointing elements
@@ -146,23 +146,134 @@ for i =1:num_ring
         % Outward pointing elements
         node_4 = node_1;
         if j==1
-            node_5 = node_3 - 1 + num_theta;
+            node_5 = node_3 - 1 + num_theta - mod(i+1,2)*num_theta;
+        elseif j==num_theta
+            node_5 = node_3 - 1 + num_theta - mod(i,2)*num_theta;
         else
             node_5 = node_3 - 1;
         end
         node_6 = node_3;
-
         ELEMENTS(element,:) = [1,node_4,node_5,node_6];
         element = element + 1;
+        
+        % Core elements
+        if i==num_ring
+            node_7 = node_5;
+            node_8 = node_6;
+            ELEMENTS(element,:) = [1,node_7,node_8,(num_ring+1)*num_theta+2];
+            element = element + 1;
+        end
         
     end
 end
 
 % Body
-for i = 1:num_theta
-    
-    
-    
+%num_height-3
+for k = 1:1
+    for i = 1:1
+        
+        % Calculate relevant element indices
+        ele_h_1 = (num_ring+1)*num_theta+3 + (k-2)*((num_ring+1)*num_theta + 1) + (i-1)*(num_theta);
+        ele_h_2 = (num_ring+1)*num_theta+3 + (k-1)*((num_ring+1)*num_theta + 1) + (i-1)*(num_theta);
+        
+        for j = 1:num_theta
+
+            % Upward pointing elements of inward pointing origin
+            node_1 = ele_h_1 + j - 1;
+            if j ~= num_theta
+                node_2 = node_1 + 1;
+            else
+                node_2 = node_1 + 1 - num_theta;
+            end
+            node_3 = node_1 + num_theta + mod(i+1,2);
+            if mod(i,2)==0 && j == num_theta
+                node_3 = node_3 - num_theta;
+            end
+            node_4 = ele_h_2 + j - 1;
+            %ELEMENTS(element,:) = [node_1,node_2,node_3,node_4];
+            %element = element + 1;
+
+            % Downward pointing elements of inward pointing origin
+            node_5 = node_2;
+            if j~= num_theta
+                node_6 = ele_h_2+j;
+            else
+                node_6 = ele_h_2;
+            end
+            node_7 = node_4;
+            node_8 = ele_h_2+num_theta+j-1+mod(i+1,2);
+            if mod(i,2)==0 && j==num_theta
+                node_8 = node_8-num_theta;
+            end
+            %ELEMENTS(element,:) = [node_5,node_6,node_7,node_8];
+            %element = element + 1;
+            
+            % Inner elements of inward pointing origin
+            node_9 = node_2;
+            node_10 = node_3;
+            node_11 = node_8;
+            node_12 = node_4;
+            %ELEMENTS(element,:) = [node_9,node_10,node_11,node_12];
+            %element = element + 1;
+
+            % Upward pointing elements of outward pointing origin
+            node_13 = node_1;
+            node_14 = node_3;
+            node_15 = node_4;
+            if j==1
+                node_16 = node_8 - 1 + num_theta - num_theta*mod(i+1,2);
+            elseif j==num_theta && mod(i,2)==0
+                node_16 = node_8 - 1 + num_theta;
+            else
+                node_16 = node_8 - 1;
+            end
+            %ELEMENTS(element,:) = [node_13,node_14,node_15,node_16];
+            %element = element + 1;
+            
+            % Downward pointing elements of outward pointing origin
+            node_17 = node_13;
+            node_18 = node_14;
+            node_19 = node_16;
+            if j==1
+                node_20 = node_14 - 1 + num_theta - num_theta*mod(i+1,2);
+            elseif j==num_theta && mod(i,2)==0
+                node_20 = node_14 - 1 + num_theta;
+            else
+                node_20 = node_14 - 1;
+            end
+            %ELEMENTS(element,:) = [node_17,node_18,node_19,node_20];
+            %element = element + 1;
+            
+            % Inner elements of outward pointing origin
+            node_21 = node_14;
+            node_22 = node_15;
+            node_23 = node_16;
+            if j==num_theta && mod(i,2)==0
+                node_24 = node_15 + mod(i+1,2);
+            else
+                node_24 = node_15 + num_theta + mod(i+1,2);
+            end
+            ELEMENTS(element,:) = [node_21,node_22,node_23,node_24];
+            element = element + 1;
+            
+            %Core elements 1
+            node_25 = node_18;
+            node_26 = node_19;
+            node_27 = node_20;
+            node_28 = ele_h_1 + (num_ring+1)*num_theta;
+            ELEMENTS(element,:) = [node_25,node_26,node_27,node_28];
+            element = element + 1;
+            
+            %Core elements 2
+            node_29 = node_18;
+            node_30 = node_26;
+            node_31 = node_20;
+            node_32 = ele_h_1 + (num_ring+1)*num_theta;
+            ELEMENTS(element,:) = [node_29,node_30,node_31,node_32];
+            element = element + 1;
+
+        end
+    end
 end
 
 % Head taper
@@ -171,12 +282,9 @@ end
 
 %% Visualization
 %scatter3(X,Y,Z,'.','k');
-for i=1:length(ELEMENTS)
-    figure(i)
-    tetramesh(ELEMENTS(1:i,:), NODES);
-end
+tetramesh(ELEMENTS, NODES);
 axis equal;
-%view(30,15);
+view(30,30);
 
 %% Define body geometry
 function [r, node_type] = get_r(theta,h,arg)

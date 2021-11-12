@@ -1,254 +1,394 @@
-% Body Parameters
-dSample = 0.5;
-lSample = 5.3;
+%% Setup
+close all;
+clear all;
 
-% Tip Parameters
-tipAngle = deg2rad(50.0);
 
-% Shank Parameters
-dShank = 1.25;
-lShank = 0.4;
+%% Parameters
+% Radii
+r_head = 6.5;
+r_shank = 3.0;
+r_body = 2.5;
 
-% Thread Parameters
-threadCount = 4.0;
-threadDepth = 0.125;
-approachAngle = deg2rad(22.5);
-recedingAngle = deg2rad(22.5);
-threadCrest = 0.03;
+% Lengths
+l_head_taper = 0.25;
+l_head = 3.75;
+l_shank_transition = 0.25;
+l_shank = 3.0;
+l_body = 42.0;
+l_tip = 5.0;
 
-% Mesh Parameters
-nFace = 3;
-nSlice = round((nFace*lSample)/(pi*dSample));
+% Thread
+thread_number = 0.5;
+thread_depth = 1.0;
+thread_width = 1.0;
+thread_crest = 0.25;
 
-[verts1, verts2, verts3, centroids, threadHeightMap, tipLength] = createCylinderArray(nSlice, nFace, dSample, tipAngle,...
-    lSample, dShank, lShank, threadCount, threadDepth, approachAngle, recedingAngle, threadCrest);
-[nPolygons, polygonWidth, polygonArea] = getMeshParameters(dSample, nFace, nSlice, verts1, verts2, verts3);
+% Mesh
+num_height = 300;
+num_ring = 2; 
+num_theta = 30;
 
-movieFig = figure('Units', 'Normalized', 'OuterPosition', [0, 0, 1, 1]);
-movieAxes = axes(movieFig);
-movieAxes.XLim = [-lSample/1.75,lSample/1.75];
-movieAxes.YLim = [-lSample/1.75,lSample/1.75];
-movieAxes.ZLim = [-lSample/1.75,lSample/1.75];
-movieAxes.DataAspectRatio = [1 1 1];
-movieAxes.XLabel.String = 'X-Axis [cm]';
-movieAxes.YLabel.String = 'Y-Axis [cm]';
-movieAxes.ZLabel.String = 'Z-Axis [cm]';
-movieAxes.FontSize = 16;
-movieAxes.XGrid = 'on';
-movieAxes.YGrid = 'on';
-movieAxes.ZGrid = 'on';
-movieAxes.View = [-45 20];
-patch(movieAxes, [verts1(1,:); verts2(1,:); verts3(1,:)],...
-    [verts1(2,:); verts2(2,:); verts3(2,:)],...
-    [verts1(3,:); verts2(3,:); verts3(3,:)],...
-    [0.70, 0.70, 0.70], 'EdgeAlpha', '0.1');
 
-function [verts1, verts2, verts3, centroids, threadHeightMap, tipLength] = createCylinderArray(nSlice, nFace, dSample, tipAngle,...
-    lSample, dShank, lShank, threadCount, threadDepth, approachAngle, recedingAngle, threadCrest)
-   
-    polygonWidth = (nFace * dSample * sin(pi / nFace)) / (nFace+1);
-    [flatPoints, pointSampleIndex] = getFlatPoints(nSlice, nFace, polygonWidth, lSample);
-    threadHeightMap = getThreadHeightMap(threadCount, threadDepth, approachAngle, recedingAngle, threadCrest, dSample, lSample, pointSampleIndex, flatPoints);
+%% Compile parameters
+arg = struct('rh',r_head,...
+    'rs',r_shank,...
+    'rb',r_body,...
+    'lht',l_head_taper,...
+    'lh',l_head,...
+    'lst',l_shank_transition,...
+    'ls',l_shank,...
+    'lb',l_body,...
+    'lt',l_tip,...
+    'tn',thread_number,...
+    'td',thread_depth,...
+    'tw',thread_width,...
+    'tc',thread_crest);
 
-    %Initialize mesh variables
-    X = (zeros(3,2*(nSlice-1)*nFace));
-    Y = (zeros(3,2*(nSlice-1)*nFace));
-    Z = (zeros(3,2*(nSlice-1)*nFace));
-    points = getPoints(nSlice, nFace, dSample, tipAngle, lSample, dShank, lShank, threadHeightMap);
 
-    currPoint = 1;
-    for j = 1:(nSlice-1)
-        for k = 1:2*nFace
-            spacer = (j-1)*(nFace+1);
-            if k <= nFace
-                p1 = points(:, k + spacer);
-                p2 = points(:, k + 1 + spacer);
-                p3 = points(:, k + nFace + 2 + spacer);
+%% Generate nodes
+% Calculate general parameters
+total_length = arg.lt + arg.lb + arg.ls + arg.lst + arg.lh + arg.lht;
+num_nodes = num_height*num_ring*num_theta;
+
+% Calculate height, ring, and theta space
+height_list = linspace(0.0,total_length,num_height);
+radius_list = linspace(1.0,0.0,num_ring+2);
+theta_list = linspace(0.0,2.0*pi,num_theta+1);
+theta_list = theta_list(1:end-1);
+
+X = zeros(num_nodes, 1);
+Y = zeros(num_nodes, 1);
+Z = zeros(num_nodes, 1);
+R = zeros(num_nodes, 1);
+T = zeros(num_nodes, 1);
+H = zeros(num_nodes, 1);
+TYPE = zeros(num_nodes, 1);
+node = 1;
+for height = height_list
+    for radius = radius_list
+        for theta = theta_list
+            
+            % Get radius, convert to cartesian
+            [r, node_type] = get_r(theta,height,arg);
+            r = r * radius;
+            if radius ~= 1.0 && radius ~= 0.0
+                [~,inner_ring_number] = min(abs(radius_list-radius));
+                inner_ring_number = inner_ring_number - 1;
+                if mod(inner_ring_number,2)~=0
+                    t = theta+pi/num_theta;
+                else
+                    t = theta;
+                end
             else
-                p1 = points(:, (k - nFace) + spacer);
-                p2 = points(:, k + 1 + spacer);
-                p3 = points(:, k + 2 + spacer);
+                t = theta;
             end
-            X(:,currPoint) = [p1(1,1);p2(1,1);p3(1,1)];
-            Y(:,currPoint) = [p1(2,1);p2(2,1);p3(2,1)];
-            Z(:,currPoint) = -[p1(3,1);p2(3,1);p3(3,1)];
-            currPoint = currPoint + 1;
+            if t > 2.0*pi
+                t = t - 2.0*pi;
+            elseif t < 0.0
+                t = t + 2.0*pi;
+            end
+            [x,y,z] = pol2cart(t, r, height);
+            X(node) = x;
+            Y(node) = y;
+            Z(node) = z;
+            R(node) = r;
+            T(node) = t;
+            H(node) = height;
+            
+            % Assign type to surface nodes only
+            if radius == 1.0
+                TYPE(node) = node_type;
+            else
+                TYPE(node) = -1;
+            end
+            node = node + 1;
+            
         end
     end
+end
 
-    if tipAngle == pi
-        tipLength = 0;
+% Remove duplicate nodes
+NODES = [X Y Z];
+[NODES, ia] = unique(NODES,'rows','stable');
+X = NODES(:,1);
+Y = NODES(:,2);
+Z = NODES(:,3);
+R = R(ia);
+T = T(ia);
+H = H(ia);
+CYL_NODES = [R T H];
+TYPE = TYPE(ia);
+num_nodes = length(NODES);
+
+
+%% Element generation
+element = 1;
+
+% Tip
+for i = 1:num_ring
+    for j = 1:num_theta
+        
+        % Inward pointing elements
+        node_1 = 1 + j + (i-1)*num_theta;
+        if j ~= num_theta
+            node_2 = node_1 + 1;
+        else
+            node_2 = node_1 + 1 - num_theta;
+        end
+        if mod(i,2) == 0
+            node_3 = node_2 + num_theta;
+        else
+            node_3 = node_1 + num_theta;
+        end
+        ELEMENTS(element,:) = [1,node_1,node_2,node_3];
+        element = element + 1;
+        
+        % Outward pointing elements
+        node_4 = node_1;
+        if j==1
+            node_5 = node_3 - 1 + num_theta - mod(i+1,2)*num_theta;
+        elseif j==num_theta
+            node_5 = node_3 - 1 + num_theta - mod(i,2)*num_theta;
+        else
+            node_5 = node_3 - 1;
+        end
+        node_6 = node_3;
+        ELEMENTS(element,:) = [1,node_4,node_5,node_6];
+        element = element + 1;
+        
+        % Core elements
+        if i==num_ring
+            node_7 = node_5;
+            node_8 = node_6;
+            ELEMENTS(element,:) = [1,node_7,node_8,(num_ring+1)*num_theta+2];
+            element = element + 1;
+        end
+        
+    end
+end
+
+% Body and head taper
+for k = 1:num_height-3
+    for i = 1:num_ring
+        
+        % Calculate relevant element indices
+        ele_h_1 = (num_ring+1)*num_theta+3 + (k-2)*((num_ring+1)*num_theta + 1) + (i-1)*(num_theta);
+        ele_h_2 = (num_ring+1)*num_theta+3 + (k-1)*((num_ring+1)*num_theta + 1) + (i-1)*(num_theta);
+        
+        for j = 1:num_theta
+
+            % Upward pointing elements of inward pointing origin
+            node_1 = ele_h_1 + j - 1;
+            if j ~= num_theta
+                node_2 = node_1 + 1;
+            else
+                node_2 = node_1 + 1 - num_theta;
+            end
+            node_3 = node_1 + num_theta + mod(i+1,2);
+            if mod(i,2)==0 && j == num_theta
+                node_3 = node_3 - num_theta;
+            end
+            node_4 = ele_h_2 + j - 1;
+            ELEMENTS(element,:) = [node_1,node_2,node_3,node_4];
+            element = element + 1;
+
+            % Downward pointing elements of inward pointing origin
+            node_5 = node_2;
+            if j~= num_theta
+                node_6 = ele_h_2+j;
+            else
+                node_6 = ele_h_2;
+            end
+            node_7 = node_4;
+            node_8 = ele_h_2+num_theta+j-1+mod(i+1,2);
+            if mod(i,2)==0 && j==num_theta
+                node_8 = node_8-num_theta;
+            end
+            ELEMENTS(element,:) = [node_5,node_6,node_7,node_8];
+            element = element + 1;
+            
+            % Inner elements of inward pointing origin
+            node_9 = node_2;
+            node_10 = node_3;
+            node_11 = node_8;
+            node_12 = node_4;
+            ELEMENTS(element,:) = [node_9,node_10,node_11,node_12];
+            element = element + 1;
+
+            % Upward pointing elements of outward pointing origin
+            node_13 = node_1;
+            node_14 = node_3;
+            node_15 = node_4;
+            if j==1
+                node_16 = node_8 - 1 + num_theta - num_theta*mod(i+1,2);
+            elseif j==num_theta && mod(i,2)==0
+                node_16 = node_8 - 1 + num_theta;
+            else
+                node_16 = node_8 - 1;
+            end
+            ELEMENTS(element,:) = [node_13,node_14,node_15,node_16];
+            element = element + 1;
+            
+            % Downward pointing elements of outward pointing origin
+            node_17 = node_13;
+            node_18 = node_14;
+            node_19 = node_16;
+            if j==1
+                node_20 = node_14 - 1 + num_theta - num_theta*mod(i+1,2);
+            elseif j==num_theta && mod(i,2)==0
+                node_20 = node_14 - 1 + num_theta;
+            else
+                node_20 = node_14 - 1;
+            end
+            ELEMENTS(element,:) = [node_17,node_18,node_19,node_20];
+            element = element + 1;
+            
+            % Inner elements of outward pointing origin
+            node_21 = node_14;
+            node_22 = node_15;
+            node_23 = node_16;
+            if j==num_theta && mod(i,2)==0
+                node_24 = node_15 + mod(i+1,2);
+            else
+                node_24 = node_15 + num_theta + mod(i+1,2);
+            end
+            ELEMENTS(element,:) = [node_21,node_22,node_23,node_24];
+            element = element + 1;
+            
+            if i==num_ring
+                %Core elements 1
+                node_25 = node_18;
+                node_26 = node_19;
+                node_27 = node_20;
+                node_28 = ele_h_1 + 2*num_theta;
+                ELEMENTS(element,:) = [node_25,node_26,node_27,node_28];
+                element = element + 1;
+
+                %Core elements 2
+                node_29 = node_25;
+                node_30 = node_26;
+                node_31 = node_24;
+                node_32 = ele_h_1 + 2*num_theta;
+                ELEMENTS(element,:) = [node_29,node_30,node_31,node_32];
+                element = element + 1;
+                
+                %Core elements 3
+                node_33 = ele_h_2 + 2*num_theta;
+                node_34 = node_30;
+                node_35 = node_31;
+                node_36 = node_32;
+                ELEMENTS(element,:) = [node_33,node_34,node_35,node_36];
+                element = element + 1;
+            end
+            
+            % Head taper
+            if k==num_height-3
+                ELEMENTS(element,:) = [length(NODES),node_6,node_7,node_8];
+                element = element + 1;
+                ELEMENTS(element,:) = [length(NODES),node_22,node_23,node_24];
+                element = element + 1;
+                if i==num_ring
+                    ELEMENTS(element,:) = [length(NODES),node_33,node_34,node_35];
+                    element = element + 1;
+                end
+            end
+
+        end
+    end
+end
+ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
+
+%% Visualization
+%scatter3(X,Y,Z,'.','k');
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
+axis equal;
+view(30,30);
+
+%% Define body geometry
+function [r, node_type] = get_r(theta,h,arg)
+    
+    % Calculate relevant heights
+    tip_2_body = arg.lt;
+    body_2_shank = tip_2_body + arg.lb;
+    shank_2_shank_transition = body_2_shank + arg.ls;
+    shank_transition_2_head = shank_2_shank_transition + arg.lst;
+    head_2_head_taper = shank_transition_2_head + arg.lh;
+    total_length = head_2_head_taper + arg.lht;
+
+    % Head taper
+    if h>=head_2_head_taper && h<=total_length
+        node_type = 8;
+        loc_in_section = (h - head_2_head_taper) / (total_length - head_2_head_taper);
+        r = arg.rh*(1.0-loc_in_section);
+        
+    % Head
+    elseif h>=shank_transition_2_head && h<=head_2_head_taper
+        node_type = 7;
+        r = arg.rh;
+        
+    % Shank transition
+    elseif h>=shank_2_shank_transition && h<=shank_transition_2_head
+        node_type = 6;
+        loc_in_section = (h - shank_2_shank_transition) / (shank_transition_2_head - shank_2_shank_transition);
+        r = arg.rs*(1.0-loc_in_section) + arg.rh*loc_in_section;
+        
+    % Shank
+    elseif h>=body_2_shank && h<=shank_2_shank_transition
+        node_type = 5;
+        r = arg.rs;
+        
+    % Body
+    elseif h>=tip_2_body && h<=body_2_shank
+        [thread_height, node_type] = get_thread_height(theta,h,arg);
+        r = arg.rb + thread_height;
+        
+    % Tip
+    elseif h>=0.0 && h<=tip_2_body
+        [thread_height, node_type] = get_thread_height(theta,h,arg);
+        loc_in_section = h/tip_2_body;
+        r = (arg.rb+thread_height)*loc_in_section;
+        
+    % Outside of body
     else
-        tipLength = dSample / (2*tan(tipAngle/2));
-    end
-    verts1 = [X(1,:); Y(1,:); Z(1,:)];
-    verts2 = [X(2,:); Y(2,:); Z(2,:)];
-    verts3 = [X(3,:); Y(3,:); Z(3,:)];
-    centroids = [mean(X); mean(Y); mean(Z)];
-    
-end
-
-function [flatPoints, pointSampleIndex] = getFlatPoints(nSlice, nFace, polygonWidth, lSample)
-
-    flatPoints = zeros(2,nSlice*(nFace+1));
-    pointSampleIndex = zeros(1,nSlice*(nFace+1));
-
-    totalWidth = polygonWidth*((nFace+1)-1);
-    currPoint = 1;
-
-    startX = -totalWidth/2;
-    startY = -lSample/2;
-
-    for currSlice = 1:nSlice
-        currY = startY + (currSlice-1)*lSample/(nSlice-1);
-
-        for currFace = 1:(nFace+1)
-            currX = startX + (currFace-1)*polygonWidth;
-
-            flatPoints(:,currPoint) = [currX; currY];
-            pointSampleIndex(1,currPoint) = 1;
-            currPoint = currPoint + 1;
-        end
-    end
-
-end
-
-function threadHeightMap = getThreadHeightMap(threadCount, threadDepth, approachAngle, recedingAngle, threadCrest, dSample, lSample, pointSampleIndex, flatPoints)
-
-    %Initialize the parameters used to define the geometric positions of
-    %the threads
-    nThreads = floor(lSample * threadCount);
-    threadSlope = 1 / (pi * dSample * threadCount);
-    approachDiameter = threadDepth*tan(approachAngle);
-    recedingDiameter = threadDepth*tan(recedingAngle);
-    inclinedApproachDiameter = approachDiameter/cos(threadSlope);
-    inclinedCrestDiameter = threadCrest/cos(threadSlope);
-    inclinedRecedingDiameter = recedingDiameter/cos(threadSlope);
-    totalInclinedDiameter = inclinedApproachDiameter + inclinedCrestDiameter + inclinedRecedingDiameter;
-
-    %Solve the geometric thread positions
-    threadIntercepts = zeros(nThreads, 4);
-    for i = 1:nThreads
-        midLine = (i - 1) * 1/threadCount - lSample/2;
-        approachLine = midLine + totalInclinedDiameter/2;
-        approachCrestLine = midLine + totalInclinedDiameter/2 - inclinedApproachDiameter;
-        recedingCrestLine = midLine - totalInclinedDiameter/2 + inclinedRecedingDiameter;
-        recedingLine = midLine - totalInclinedDiameter/2;
-        threadIntercepts(i,:) = [approachLine, approachCrestLine, recedingCrestLine, recedingLine];
-    end
-
-    %Solve for the left edges (min X value) of the samples
-    sampleFirstPoint = zeros(1,length(pointSampleIndex(1,:)));
-    for i = 1:length(pointSampleIndex)-1
-        if pointSampleIndex(i+1) ~= pointSampleIndex(i)
-            sampleFirstPoint(i+1) = 1;
-        end
-    end
-    sampleFirstPoint(1,1) = 1;
-    xCoords = flatPoints(1,:);
-    yCoords = flatPoints(2,:);
-    sampleStart = xCoords(sampleFirstPoint(1,:)==1);
-
-    %Determine whether each polygon falls within the thread. If they do,
-    %apply the proper thread angle fluence correction factor
-    threadHeightMap = (zeros(1,length(xCoords(1,:))));
-
-    for currPoint = 1 : length(xCoords(1,:))
-        yConst = yCoords(currPoint);
-        xConst = threadSlope * (xCoords(currPoint) - sampleStart(pointSampleIndex(currPoint)));
-        for currThread = 1 : nThreads
-
-            eqn1 = (yConst) <=  xConst + threadIntercepts(currThread, 1);
-            eqn2 = (yConst) >=  xConst + threadIntercepts(currThread, 2);
-            eqn3 = (yConst) <=  xConst + threadIntercepts(currThread, 3);
-            eqn4 = (yConst) >=  xConst + threadIntercepts(currThread, 4);
-            eqn5 = (yConst) <=  xConst + threadIntercepts(currThread, 2);
-            eqn6 = (yConst) >=  xConst + threadIntercepts(currThread, 3);
-
-            if eqn1 && eqn2
-                A = -threadSlope;
-                B = 1;
-                C = (threadSlope*sampleStart(pointSampleIndex(currPoint))-threadIntercepts(currThread, 1));
-                x1 = xCoords(currPoint);
-                y1 = yCoords(currPoint);
-                distance = abs((A*x1+B*y1+C)/sqrt(A^2+B^2));
-                threadHeightMap(1,currPoint) = distance / tan(approachAngle);
-            elseif eqn3 && eqn4
-                A = -threadSlope;
-                B = 1;
-                C = (threadSlope*sampleStart(pointSampleIndex(currPoint))-threadIntercepts(currThread, 4));
-                x1 = xCoords(currPoint);
-                y1 = yCoords(currPoint);
-                distance = abs((A*x1+B*y1+C)/sqrt(A^2+B^2));
-                threadHeightMap(1,currPoint) =  distance / tan(recedingAngle);
-            elseif eqn5 && eqn6
-                threadHeightMap(1,currPoint) =  threadDepth;
-            end
-
-        end
-    end
-
-end
-
-function points = getPoints(nSlice, nFace, dSample, tipAngle, lSample, dShank, lShank, threadHeightMap)
-    
-    currPoint = 1;
-    points = zeros(3,nSlice * (nFace+1));
-    taperTerminationZ = lSample/2 - dSample/(2*tan(tipAngle/2));
-
-    for currRow = 1:nSlice
-        for currColumn =  1:nFace+1
-
-            currZ = -1 * ((lSample/2) - (currRow-1) * (lSample/(nSlice-1)));
-
-            %Taper
-            if currZ >= taperTerminationZ && tipAngle ~= pi && currZ ~= lSample/2
-                currX = ((lSample/2-currZ)/(lSample/2-taperTerminationZ))*(dSample/2 + threadHeightMap(currPoint))*cos(2*(currColumn-1)*pi/nFace);
-                currY = ((lSample/2-currZ)/(lSample/2-taperTerminationZ))*(dSample/2 + threadHeightMap(currPoint))*sin(2*(currColumn-1)*pi/nFace);
-            
-            %Tip
-            elseif currZ >= taperTerminationZ && tipAngle ~= pi && currZ == lSample/2
-                tipZ = -1 * ((lSample/2) - (currRow-1.01) * (lSample/(nSlice-1)));
-                currX = ((lSample/2-tipZ)/(lSample/2-taperTerminationZ))*(dSample/2 + threadHeightMap(currPoint))*cos(2*(currColumn-1)*pi/nFace);
-                currY = ((lSample/2-tipZ)/(lSample/2-taperTerminationZ))*(dSample/2 + threadHeightMap(currPoint))*sin(2*(currColumn-1)*pi/nFace);
-            
-            %Shank
-            elseif currZ < -lSample/2 + lShank
-                currX = (dShank/2)*cos(2*(currColumn-1)*pi/nFace);
-                currY = (dShank/2)*sin(2*(currColumn-1)*pi/nFace);
-            
-            %Thread body
-            else
-                currX = (dSample/2 + threadHeightMap(currPoint))*cos(2*(currColumn-1)*pi/nFace);
-                currY = (dSample/2 + threadHeightMap(currPoint))*sin(2*(currColumn-1)*pi/nFace);
-            end
-
-            if abs(currX) <= 1.0e-6
-                currX = 0.0;
-            end
-            if abs(currY) <= 1.0e-6
-                currY = 0.0;
-            end
-            if abs(currZ) <= 1.0e-6
-                currZ = 0.0;
-            end
-            points(:, currPoint) = [currX; currY; currZ];
-
-            currPoint = currPoint + 1;
-        end
+        node_type = -1;
+        r = 0.0;
+        
     end
     
 end
 
-function [nPolygons, polygonWidth, polygonArea] = getMeshParameters(dSample, nFace, nSlice, verts1, verts2, verts3)
-    
-    nPolygons = 2 * nFace * (nSlice - 1);
+%% Define thread geometry
+function [thread_height, node_type] = get_thread_height(theta,h,arg)
 
-    polygonArea = zeros(1,nPolygons);
-    for currPolygon = 1:nPolygons
-        polygonArea(1,currPolygon) = 0.5*norm(cross((verts2(:,currPolygon)-verts1(:,currPolygon)),(verts3(:,currPolygon)-verts1(:,currPolygon))));
+    % Calculate parameters
+    nearest_thread = round( (2.0*pi*h*arg.tn - theta) / (2.0*pi) );
+    mid_height = theta/(2.0*pi*arg.tn) + nearest_thread/arg.tn;
+    min_height = mid_height - 0.5*arg.tw;
+    max_height = mid_height + 0.5*arg.tw;
+    crest_min_height = mid_height - 0.5*arg.tc;
+    crest_max_height = mid_height + 0.5*arg.tc;
+    
+    % Approach
+    if h>=min_height && h<crest_min_height
+        node_type = 2;
+        loc_in_section = (h - min_height) / (crest_min_height - min_height);
+        thread_height = arg.td*loc_in_section;
+    
+    % Crest
+    elseif h>=crest_min_height && h<=crest_max_height
+        node_type = 3;
+        thread_height = arg.td;
+        
+    
+    % Receeding
+    elseif h>crest_max_height && h<=max_height
+        node_type = 4;
+        loc_in_section = (h - crest_max_height) / (max_height - crest_max_height);
+        thread_height = arg.td*(1.0-loc_in_section);
+    
+    % Body
+    else
+        node_type = 1;
+        thread_height = 0.0;
     end
-
-    polygonWidth = (nFace * dSample * sin(pi / nFace)) / (nFace+1);
-    
 end

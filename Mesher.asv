@@ -286,18 +286,50 @@ end
 %% Post-Process elements 
 num_elements = length(ELEMENTS);
 ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
-ELEMENT_CIRCUMCENTER = circumcenter(ELEMENT_TRIANGULATION);
+[ELEMENT_CIRCUMCENTER, ELEMENT_CIRCUMRADIUS] = circumcenter(ELEMENT_TRIANGULATION);
 ELEMENT_VOLUME = zeros(num_elements, 1);
-ELEMENT_CIRCUMRADIUS = zeros(num_elements, 1);
 ELEMENT_INRADIUS = zeros(num_elements, 1);
 for i = 1:num_elements
     % Volume calculation
-    ele_node_matrix = [X(ELEMENTS(i,:)), Y(ELEMENTS(i,:)), Z(ELEMENTS(i,:))];
-    ele_volume_matrix  = [ele_node_matrix(1,:) - ele_node_matrix(4,:); ele_node_matrix(2,:) - ele_node_matrix(4,:); ele_node_matrix(3,:) - ele_node_matrix(4,:)];
-    ELEMENT_VOLUME(i) = abs(det(ele_volume_matrix)) / 6.0;
+    ele_node = [X(ELEMENTS(i,:)), Y(ELEMENTS(i,:)), Z(ELEMENTS(i,:))];
+    ele_vol  = [ele_node(1,:) - ele_node(4,:); ele_node(2,:) - ele_node(4,:); ele_node(3,:) - ele_node(4,:)];
+    ELEMENT_VOLUME(i) = abs(det(ele_vol)) / 6.0;
     
-    % Circumradius calculation
-    ELEMENT_CIRCUMRADIUS(i) = norm(ELEMENT_CIRCUMCENTER(i,:) - ele_node_matrix(1,:));
+    % Inradius calculation
+    ele_norm_dirns = [ele_node(4,:)-ele_node(1,:);
+                      ele_node(3,:)-ele_node(1,:);
+                      ele_node(1,:)-ele_node(2,:);
+                      ele_node(2,:)-ele_node(1,:)];
+    ele_norms = [cross(ele_node(1,:) - ele_node(2,:), ele_node(2,:) - ele_node(3,:));
+                 cross(ele_node(1,:) - ele_node(2,:), ele_node(2,:) - ele_node(4,:));
+                 cross(ele_node(2,:) - ele_node(3,:), ele_node(3,:) - ele_node(4,:));
+                 cross(ele_node(1,:) - ele_node(4,:), ele_node(4,:) - ele_node(3,:))];
+    ele_norms = (ele_norms ./ vecnorm(ele_norms,2,2)) * (-1*sign(dot(ele_norm_dirns,ele_norms,2)));
+    A = [1.0, ele_norms(1,:);
+         1.0, ele_norms(2,:);
+         1.0, ele_norms(3,:);
+         1.0, ele_norms(4,:);];
+    B = [ele_norms(1,:)*ele_node(1,:)';
+         ele_norms(2,:)*ele_node(2,:)';
+         ele_norms(3,:)*ele_node(3,:)';
+         ele_norms(4,:)*ele_node(4,:)';];
+    soln = A\B;
+    ELEMENT_INRADIUS(i) = soln(1);
+    
+    
+    [x,y,z] = sphere();
+    x = x * soln(1);
+    y = y * soln(1);
+    z = z * soln(1);
+    surf(x+soln(2),y+soln(3),z+soln(4))
+    hold on
+    trimesh(ELEMENTS(i,:), X, Y, Z)
+    scatter3(ele_node(1,1),ele_node(1,2),ele_node(1,3),'.','k')
+    scatter3(ele_node(2,1),ele_node(2,2),ele_node(2,3),'.','k')
+    scatter3(ele_node(3,1),ele_node(3,2),ele_node(3,3),'.','k')
+    scatter3(ele_node(4,1),ele_node(4,2),ele_node(4,3),'.','k')
+    hold off
+    axis equal
 end
 
 

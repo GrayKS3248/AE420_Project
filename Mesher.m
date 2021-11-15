@@ -289,11 +289,34 @@ ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
 [ELEMENT_CIRCUMCENTER, ELEMENT_CIRCUMRADIUS] = circumcenter(ELEMENT_TRIANGULATION);
 ELEMENT_VOLUME = zeros(num_elements, 1);
 ELEMENT_INRADIUS = zeros(num_elements, 1);
+ELEMENT_INCENTER = zeros(num_elements, 3);
 for i = 1:num_elements
     % Volume calculation
-    ele_node_matrix = [X(ELEMENTS(i,:)), Y(ELEMENTS(i,:)), Z(ELEMENTS(i,:))];
-    ele_volume_matrix  = [ele_node_matrix(1,:) - ele_node_matrix(4,:); ele_node_matrix(2,:) - ele_node_matrix(4,:); ele_node_matrix(3,:) - ele_node_matrix(4,:)];
-    ELEMENT_VOLUME(i) = abs(det(ele_volume_matrix)) / 6.0;
+    ele_node = [X(ELEMENTS(i,:)), Y(ELEMENTS(i,:)), Z(ELEMENTS(i,:))];
+    ele_vol  = [ele_node(1,:) - ele_node(4,:); ele_node(2,:) - ele_node(4,:); ele_node(3,:) - ele_node(4,:)];
+    ELEMENT_VOLUME(i) = abs(det(ele_vol)) / 6.0;
+    
+    % Inradius calculation
+    ele_norm_dirns = [ele_node(4,:)-ele_node(1,:);
+                      ele_node(3,:)-ele_node(1,:);
+                      ele_node(1,:)-ele_node(2,:);
+                      ele_node(2,:)-ele_node(1,:)];
+    ele_norms = [cross(ele_node(1,:) - ele_node(2,:), ele_node(2,:) - ele_node(3,:));
+                 cross(ele_node(1,:) - ele_node(2,:), ele_node(2,:) - ele_node(4,:));
+                 cross(ele_node(2,:) - ele_node(3,:), ele_node(3,:) - ele_node(4,:));
+                 cross(ele_node(1,:) - ele_node(4,:), ele_node(4,:) - ele_node(3,:))];
+    ele_norms = (ele_norms ./ vecnorm(ele_norms,2,2)) .* (-1*sign(dot(ele_norm_dirns,ele_norms,2)));
+    A = [1.0, ele_norms(1,:);
+         1.0, ele_norms(2,:);
+         1.0, ele_norms(3,:);
+         1.0, ele_norms(4,:);];
+    B = [ele_norms(1,:)*ele_node(1,:)';
+         ele_norms(2,:)*ele_node(2,:)';
+         ele_norms(3,:)*ele_node(3,:)';
+         ele_norms(4,:)*ele_node(4,:)';];
+    soln = A\B;
+    ELEMENT_INRADIUS(i) = soln(1);
+    ELEMENT_INCENTER(i,:) = soln(2:end)';
 end
 
 

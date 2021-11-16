@@ -23,10 +23,15 @@ thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 20;
-num_ring = 1; 
-num_theta = 10;
+num_height = 10;%200
+num_ring = 2;%5
+num_theta = 9;%19
 
+% Options
+render_mesh = true;
+rotations = 1.0;
+color_cycles = 10.0;
+    
 
 %% Compile parameters
 arg = struct('rh',r_head,...
@@ -290,6 +295,7 @@ ELEMENT_TRIANGULATION = triangulation(ELEMENTS, X, Y, Z);
 ELEMENT_VOLUME = zeros(num_elements, 1);
 ELEMENT_INRADIUS = zeros(num_elements, 1);
 ELEMENT_INCENTER = zeros(num_elements, 3);
+ELEMENT_AR = zeros(num_elements, 1);
 for i = 1:num_elements
     % Volume calculation
     ele_node = [X(ELEMENTS(i,:)), Y(ELEMENTS(i,:)), Z(ELEMENTS(i,:))];
@@ -317,16 +323,75 @@ for i = 1:num_elements
     soln = A\B;
     ELEMENT_INRADIUS(i) = soln(1);
     ELEMENT_INCENTER(i,:) = soln(2:end)';
+    
+    % Aspect ratio calculation
+    ELEMENT_AR(i) = 3.0*ELEMENT_INRADIUS(i) / ELEMENT_CIRCUMRADIUS(i);
 end
-
+MESH_AR = [mean(ELEMENT_AR), std(ELEMENT_AR), median(ELEMENT_AR), min(ELEMENT_AR), max(ELEMENT_AR)];
 
 %% Visualization
-%scatter3(X,Y,Z,'.','k');
-%hold on
+if render_mesh
+    colormap hsv;
+    cmap = colormap;
+    color = zeros(num_elements,3);
+    for i=1:num_elements
+        color(i,:) = cmap(floor(mod((256*color_cycles*((i-1)/(num_elements-1))),256))+1,:);
+    end
+    set(gcf,'Position',[10 50 1100 1010])
+    for i=1:num_elements
+        tetramesh(ELEMENTS(i,:),NODES,'FaceColor',color(i,:),'FaceAlpha','1.0','EdgeAlpha', '1.0','EdgeColor','k');
+        hold on
+        xlim([-1.05*max([r_head,r_shank,r_body]), 1.05*max([r_head,r_shank,r_body])])
+        ylim([-1.05*max([r_head,r_shank,r_body]), 1.05*max([r_head,r_shank,r_body])])
+        zlim([-0.05*total_length, 1.05*total_length])
+        view(rad2deg(2.0*pi - rotations*2.0*pi*((i-1)/(num_elements-1)))+5.0,50+30*((i-1)/(num_elements-1)));
+        set(gca,'XTickLabel',[]);
+        set(gca,'YTickLabel',[]);
+        set(gca,'ZTickLabel',[]);
+        h=gca;
+        h.XAxis.TickLength = [0 0];
+        h.YAxis.TickLength = [0 0];
+        h.ZAxis.TickLength = [0 0];
+        grid on
+        axis vis3d
+        %saveas(gcf,strcat("mesh_",num2str(i),'.png'),"png")
+    end
+    for i=num_elements+1:num_elements+601
+        xlim([-1.05*max([r_head,r_shank,r_body]), 1.05*max([r_head,r_shank,r_body])])
+        ylim([-1.05*max([r_head,r_shank,r_body]), 1.05*max([r_head,r_shank,r_body])])
+        zlim([-0.05*total_length, 1.05*total_length])
+        view(rad2deg(2.0*pi - rotations*2.0*pi*((i-1)/(num_elements-1)))+5.0,80-20*((i-num_elements-1)/600));
+        set(gca,'XTickLabel',[]);
+        set(gca,'YTickLabel',[]);
+        set(gca,'ZTickLabel',[]);
+        h=gca;
+        h.XAxis.TickLength = [0 0];
+        h.YAxis.TickLength = [0 0];
+        h.ZAxis.TickLength = [0 0];
+        grid on
+        axis vis3d
+        saveas(gcf,strcat("mesh_",num2str(i),'.png'),"png")
+    end
+end
+close all
+
 trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
-%hold off
+title("Surface Mesh")
+xlabel('mm')
+ylabel('mm')
+zlabel('mm')
 axis equal;
 view(30,30);
+saveas(gcf,'surf.png',"png")
+close all
+
+histogram(ELEMENT_AR)
+title("Mesh AR")
+xlabel("Aspect Ratio")
+ylabel("Number of Elements")
+xlim([0.0,1.0])
+saveas(gcf,'condition.png',"png")
+close all
 
 %% Define body geometry
 function [r, node_type] = get_r(theta,h,arg)

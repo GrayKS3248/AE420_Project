@@ -4,7 +4,7 @@ clear all;
 
 
 %% Parameters
-% Radii
+% Radii 
 r_head = 6.5;
 r_shank = 3.0;
 r_body = 2.5;
@@ -23,15 +23,18 @@ thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 10;%200;
+num_height = 200;
 num_ring = 1;%5;
 num_theta = 6;%19;
 
-% Options
+% Render options
 render_mesh = false;
 rotations = 1.0;
 color_cycles = 10.0;
     
+% Visualization options
+vis = false;
+
 
 %% Compile parameters
 arg = struct('rh',r_head,...
@@ -329,7 +332,7 @@ for i = 1:num_elements
 end
 MESH_AR = [mean(ELEMENT_AR), std(ELEMENT_AR), median(ELEMENT_AR), min(ELEMENT_AR), max(ELEMENT_AR)];
 save('elements.mat','ELEMENT_TRIANGULATION');
-save()
+save('type.mat','TYPE')
 save('quality.mat','MESH_AR');
 
 %% Visualization
@@ -378,23 +381,26 @@ if render_mesh
 end
 close all
 
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
-title("Surface Mesh")
-xlabel('mm')
-ylabel('mm')
-zlabel('mm')
-axis equal;
-view(30,30);
-saveas(gcf,'surf.png',"png")
-close all
+if vis
+    trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
+    title("Surface Mesh")
+    xlabel('mm')
+    ylabel('mm')
+    zlabel('mm')
+    axis equal;
+    view(30,30);
+    saveas(gcf,'surf.png',"png")
+    close all
 
-histogram(ELEMENT_AR)
-title("Mesh AR")
-xlabel("Aspect Ratio")
-ylabel("Number of Elements")
-xlim([0.0,1.0])
-saveas(gcf,'condition.png',"png")
-close all
+    histogram(ELEMENT_AR)
+    title("Mesh AR")
+    xlabel("Aspect Ratio")
+    ylabel("Number of Elements")
+    xlim([0.0,1.0])
+    saveas(gcf,'condition.png',"png")
+    close all
+end
+
 
 %% Define body geometry
 function [r, node_type] = get_r(theta,h,arg)

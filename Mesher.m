@@ -4,7 +4,7 @@ clear all;
 
 
 %% Parameters
-% Radii
+% Radii 
 r_head = 6.5;
 r_shank = 3.0;
 r_body = 2.5;
@@ -23,9 +23,9 @@ thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 10;%200;
-num_ring = 1;%5;
-num_theta = 6;%19;
+num_height = 200;
+num_ring = 4;
+num_theta = 17;
 
 % Render options
 render_mesh = false;
@@ -33,7 +33,7 @@ rotations = 1.0;
 color_cycles = 10.0;
     
 % Visualization options
-vis = false;
+vis = true;
 
 
 %% Compile parameters

@@ -1,6 +1,6 @@
 %% Setup
-close all;
-clear all;
+close all
+clear
 
 
 %% Parameters
@@ -18,14 +18,14 @@ l_tip = 5.0;
 
 % Thread
 thread_number = 0.5;
-thread_depth = 1.0;
+thread_depth = 0.35;
 thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 200;
-num_ring = 4;
-num_theta = 17;
+num_height = 185;
+num_ring = 5;
+num_theta = 18;
 
 % Render options
 render_mesh = false;
@@ -330,7 +330,7 @@ for i = 1:num_elements
     % Aspect ratio calculation
     ELEMENT_AR(i) = 3.0*ELEMENT_INRADIUS(i) / ELEMENT_CIRCUMRADIUS(i);
 end
-MESH_AR = [mean(ELEMENT_AR), std(ELEMENT_AR), median(ELEMENT_AR), min(ELEMENT_AR), max(ELEMENT_AR)];
+MESH_AR = [mean(ELEMENT_AR), std(ELEMENT_AR), median(ELEMENT_AR), min(ELEMENT_AR), max(ELEMENT_AR)]
 save('elements.mat','ELEMENT_TRIANGULATION');
 save('type.mat','TYPE')
 save('quality.mat','MESH_AR');
@@ -360,7 +360,7 @@ if render_mesh
         h.ZAxis.TickLength = [0 0];
         grid on
         axis vis3d
-        %saveas(gcf,strcat("mesh_",num2str(i),'.png'),"png")
+        saveas(gcf,strcat("mesh_",num2str(i),'.png'),"png")
     end
     for i=num_elements+1:num_elements+601
         xlim([-1.05*max([r_head,r_shank,r_body]), 1.05*max([r_head,r_shank,r_body])])
@@ -382,6 +382,7 @@ end
 close all
 
 if vis
+    figure(1)
     trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
     title("Surface Mesh")
     xlabel('mm')
@@ -389,16 +390,17 @@ if vis
     zlabel('mm')
     axis equal;
     view(30,30);
+    set(gcf,'Position',[50 55 750 1000])
     saveas(gcf,'surf.png',"png")
-    close all
 
+    figure(2)
     histogram(ELEMENT_AR)
     title("Mesh AR")
     xlabel("Aspect Ratio")
     ylabel("Number of Elements")
     xlim([0.0,1.0])
+    set(gcf,'Position',[825 55 1200 1000])
     saveas(gcf,'condition.png',"png")
-    close all
 end
 
 

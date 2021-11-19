@@ -23,12 +23,12 @@ thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 10;%200
-num_ring = 2;%5
-num_theta = 9;%19
+num_height = 200;
+num_ring = 5;
+num_theta = 19;
 
 % Options
-render_mesh = true;
+render_mesh = false;
 rotations = 1.0;
 color_cycles = 10.0;
     
@@ -328,6 +328,8 @@ for i = 1:num_elements
     ELEMENT_AR(i) = 3.0*ELEMENT_INRADIUS(i) / ELEMENT_CIRCUMRADIUS(i);
 end
 MESH_AR = [mean(ELEMENT_AR), std(ELEMENT_AR), median(ELEMENT_AR), min(ELEMENT_AR), max(ELEMENT_AR)];
+save('elements.mat','ELEMENT_TRIANGULATION');
+save('quality.mat','MESH_AR');
 
 %% Visualization
 if render_mesh

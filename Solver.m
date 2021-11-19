@@ -4,7 +4,7 @@ clear
 
 
 %% Parameter definition
-E = 200.0;
+E = 200.0e9;
 v = 0.28;
 
 
@@ -51,10 +51,10 @@ for ele = 1:n_elements
         dN(:,3*(node-1)+2) = [0.0; c(node)*N(node,2); 0.0; c(node)*N(node,1); c(node)*N(node,3); 0.0];
         dN(:,3*(node-1)+3) = [0.0; 0.0; c(node)*N(node,3); 0.0; c(node)*N(node,2); c(node)*N(node,1)];
     end
-    dN(dN<1e-6) = 0.0;
+    dN(abs(dN)<1e-6) = 0.0;
 
     % Solve for the stiffness
-    K_elements(ele,:,:) = dN'*E*dN;
+    K_elements(ele,:,:) = dN'*E_mat*dN;
 
 end
 

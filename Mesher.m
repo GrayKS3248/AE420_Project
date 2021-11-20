@@ -5,7 +5,7 @@ clear
 
 %% Parameters
 % Radii 
-r_head = 3.0;
+r_head = 6.5;
 r_shank = 3.0;
 r_body = 2.5;
 
@@ -18,14 +18,14 @@ l_tip = 5.0;
 
 % Thread
 thread_number = 0.5;
-thread_depth = 0.0;%0.75;
+thread_depth = 0.75;
 thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 190;
-num_ring = 5;
-num_theta = 18;
+num_height = 55;
+num_ring = 2;
+num_theta = 9;
 
 % Render options
 render_mesh = false;
@@ -69,11 +69,13 @@ R = zeros(num_nodes, 1);
 T = zeros(num_nodes, 1);
 H = zeros(num_nodes, 1);
 TYPE = zeros(num_nodes, 1);
+height_level = 0;
 node = 1;
 for height = height_list
+    height_level = height_level + 1;
     for radius = radius_list
         for theta = theta_list
-            
+
             % Get radius, convert to cartesian
             [r, node_type] = get_r(theta,height,arg);
             r = r * radius;

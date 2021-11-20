@@ -25,10 +25,12 @@ node_types_that_are_fixed_in_z = [1, 2, 3, 4];
 node_indices_that_are_fixed_in_x = [];
 node_indices_that_are_fixed_in_y = [];
 node_indices_that_are_fixed_in_z = [];
-fixed_node_z_range = [5.0, 15.5];  %mm
+fixed_node_z_range = [5.0, 36.5];  %mm
 
 
-%% Visualization options
+%% Simulation and visualization options
+make_sparse = false;
+remove_outliers = true;
 show_fixed = true;
 show_load = true;
 
@@ -117,7 +119,11 @@ clear P1 P2 P3 P4 N1 N2 N3 N4 N k1 k2 k3 k4 k ele node top_of_head_nodes coords 
 
 
 %% Stiffness and load assembly
-K_global = zeros(n_nodes*3, n_nodes*3);
+if make_sparse
+    K_global = sparse(n_nodes*3, n_nodes*3);
+else
+    K_global = zeros(n_nodes*3, n_nodes*3);
+end
 R_T_global = zeros(3*n_nodes,1);
 
 for ele = 1:n_elements
@@ -240,105 +246,288 @@ for ele=1:n_elements
     elements_von_mises(ele,:) = sqrt(0.5*((xx-yy)^2.0+(yy-zz)^2+(zz-xx)^2+6.0*((xy^2)+(yz^2)+(xz^2))));
 end
 
-% Stress and strain cross section data
-precision = 1000;
-delta_x = max(scaled_displaced_nodes(:,1))-min(scaled_displaced_nodes(:,1));
-delta_z = max(scaled_displaced_nodes(:,3))-min(scaled_displaced_nodes(:,3));
-norm_delta_x = delta_x / (delta_x+delta_z);
-norm_delta_z = delta_z / (delta_x+delta_z);
-norm_precision = precision / max([norm_delta_x, norm_delta_z]);
-x_precision = round(norm_precision * norm_delta_x);
-z_precision = round(norm_precision * norm_delta_z);
-x_space = linspace( min(scaled_displaced_nodes(:,1)), max(scaled_displaced_nodes(:,1)), x_precision);
-z_space = linspace( max(scaled_displaced_nodes(:,3)), min(scaled_displaced_nodes(:,3)), z_precision);
-[X,Z] = meshgrid(x_space, z_space);
-cross_section_stress = zeros(z_precision, x_precision, 6);
-cross_section_strain = zeros(z_precision, x_precision, 6);
-cross_section_von_mises = zeros(z_precision, x_precision, 1);
-x_ind = 0;
+% Take a cross section of the mesh
+cross_section_connectivity = zeros(0,4);
+cross_section_orig_ele_ind = zeros(0,1);
+cross_section_stress = zeros(0, 6);
+cross_section_von_mises = zeros(0, 1);
+for ele = 1:n_elements
+    ele_nodes = nodes(connectivity(ele,:),2);
 
-% Find those elements who are around the y axis
-mid_plane_elements = [];
-for ele=1:n_elements
-    if min(scaled_displaced_nodes(connectivity(ele,:),2)) <= 0.0 && max(scaled_displaced_nodes(connectivity(ele,:),2)) >= 0.0
-        mid_plane_elements(end+1) = ele;
-    end
-end
-n_mid_plane_elements = length(mid_plane_elements);
+    % Tet has at least one node on the XZ plane
+    if min(abs(ele_nodes)) < 1.0e-10
+        nodes_on_xz = abs(ele_nodes) < 1.0e-10;
 
-% Populate the cross sectional space
-for x=x_space
-    z_ind = 0;
-    x_ind = x_ind + 1;
+        % Tet has a face on the XZ plane
+        if sum(nodes_on_xz) == 3
+            cross_section_connectivity(end+1,:) = connectivity(ele,:);
+            cross_section_orig_ele_ind(end+1,:) = ele;
+            cross_section_stress(end+1,:) = elements_stress(ele,:);
+            cross_section_von_mises(end+1,:) = elements_von_mises(ele,:);
+        
+        % Tet has a segment on the XZ plane
+        elseif sum(nodes_on_xz) == 2
+            nodes_off_xz = ele_nodes(~nodes_on_xz);
 
-    % Search for those elements whose x range surround the current x point
-    mid_plane_elements_with_good_x = [];
-    for ele_ind=1:n_mid_plane_elements
-        ele_x_coords = scaled_displaced_nodes(connectivity(mid_plane_elements(ele_ind),:),1);
-        if min(ele_x_coords) <= x && max(ele_x_coords) >= x
-            mid_plane_elements_with_good_x(end+1) = mid_plane_elements(ele_ind);
-        end
-    end
-    n_mid_plane_elements_with_good_x = length(mid_plane_elements_with_good_x);
-
-    for z=z_space
-        z_ind = z_ind + 1;
-
-        found = false;
-        ele_ind = 1;
-        coord = [x 0.0 z];
-
-        while ~found && ele_ind <= n_mid_plane_elements_with_good_x
-            ele = mid_plane_elements_with_good_x(ele_ind);
-
-            if min(scaled_displaced_nodes(connectivity(ele,:),3)) <= z && max(scaled_displaced_nodes(connectivity(ele,:),3)) >= z
-                if pt_in_tet(scaled_displaced_nodes(connectivity(ele,:),:), coord) ~= 0
-                    found = true;
-                end
-
+            % Tet stradles XZ
+            if min(nodes_off_xz) < 1.0e-10 && max(nodes_off_xz) > 1.0e-10
+                cross_section_connectivity(end+1,:) = connectivity(ele,:);
+                cross_section_orig_ele_ind(end+1,:) = ele;
+                cross_section_stress(end+1,:) = elements_stress(ele,:);
+                cross_section_von_mises(end+1,:) = elements_von_mises(ele,:);
             end
 
-            ele_ind = ele_ind + 1;
+        % Tet has a point on the XZ plane
+        elseif sum(nodes_on_xz) == 1
+            nodes_off_xz = ele_nodes(~nodes_on_xz);
+
+            % Tet stradles XZ
+            if min(nodes_off_xz) < 1.0e-10 && max(nodes_off_xz) > 1.0e-10
+                cross_section_connectivity(end+1,:) = connectivity(ele,:);
+                cross_section_orig_ele_ind(end+1,:) = ele;
+                cross_section_stress(end+1,:) = elements_stress(ele,:);
+                cross_section_von_mises(end+1,:) = elements_von_mises(ele,:);
+            end
+
         end
-        
-        if found
-            cross_section_stress(z_ind, x_ind, :) = elements_stress(ele,:);
-            cross_section_strain(z_ind, x_ind, :) = elements_strain(ele,:);
-            cross_section_von_mises(z_ind, x_ind, :) = elements_von_mises(ele,:);
-        else
-            cross_section_stress(z_ind, x_ind, :) = [nan, nan, nan, nan, nan, nan];
-            cross_section_strain(z_ind, x_ind, :) = [nan, nan, nan, nan, nan, nan];
-            cross_section_von_mises(z_ind, x_ind, :) = nan;
+
+    % Tet intersects the XZ plane
+    elseif min(nodes(connectivity(ele,:),2)) < 1.0e-10 && max(nodes(connectivity(ele,:),2)) > -1.0e-10
+        cross_section_connectivity(end+1,:) = connectivity(ele,:);
+        cross_section_orig_ele_ind(end+1,:) = ele;
+        cross_section_stress(end+1,:) = elements_stress(ele,:);
+        cross_section_von_mises(end+1,:) = elements_von_mises(ele,:);
+    end
+
+end
+cross_section_orig_node_ind = reshape(cross_section_connectivity,[],1);
+cross_section_orig_node_ind = unique(cross_section_orig_node_ind);
+
+% Gather node-wisestress data in mesh cross section
+cross_section_node_stress = zeros(length(cross_section_orig_node_ind(:,1)), 6);
+cross_section_node_von_mises = zeros(length(cross_section_orig_node_ind(:,1)), 1);
+for node_ind=1:length(cross_section_orig_node_ind(:,1))
+    for ele = 1:length(cross_section_connectivity(:,1))
+    
+        if sum(cross_section_connectivity(ele,:)==cross_section_orig_node_ind(node_ind))==1
+            
+            % XX
+            if abs(elements_stress(cross_section_orig_ele_ind(ele),1)) > abs(cross_section_node_stress(node_ind, 1))
+                cross_section_node_stress(node_ind, 1) = elements_stress(cross_section_orig_ele_ind(ele),1);
+            end
+            
+            % YY
+            if abs(elements_stress(cross_section_orig_ele_ind(ele),2)) > abs(cross_section_node_stress(node_ind, 2))
+                cross_section_node_stress(node_ind, 2) = elements_stress(cross_section_orig_ele_ind(ele),2);
+            end
+    
+            % ZZ
+            if abs(elements_stress(cross_section_orig_ele_ind(ele),3)) > abs(cross_section_node_stress(node_ind, 3))
+                cross_section_node_stress(node_ind, 3) = elements_stress(cross_section_orig_ele_ind(ele),3);
+            end
+    
+            % XY
+            if abs(elements_stress(cross_section_orig_ele_ind(ele),4)) > abs(cross_section_node_stress(node_ind, 4))
+                cross_section_node_stress(node_ind, 4) = elements_stress(cross_section_orig_ele_ind(ele),4);
+            end
+    
+            % YZ
+            if abs(elements_stress(cross_section_orig_ele_ind(ele),5)) > abs(cross_section_node_stress(node_ind, 5))
+                cross_section_node_stress(node_ind, 5) = elements_stress(cross_section_orig_ele_ind(ele),5);
+            end
+    
+            % XZ
+            if abs(elements_stress(cross_section_orig_ele_ind(ele),6)) > abs(cross_section_node_stress(node_ind, 6))
+                cross_section_node_stress(node_ind, 6) = elements_stress(cross_section_orig_ele_ind(ele),6);
+            end
+    
+            % Von mises
+            if abs(elements_von_mises(cross_section_orig_ele_ind(ele))) > abs(cross_section_node_von_mises(node_ind))
+                cross_section_node_von_mises(node_ind) = elements_von_mises(cross_section_orig_ele_ind(ele));
+            end
+    
         end
     end
 end
 
-% Calculate principal stresses
-cross_section_principal_stresses = zeros(z_precision,x_precision,3);
-for x_ind =1:x_precision
-    for z_ind=1:z_precision
-        xx = cross_section_stress(z_ind,x_ind,1);
-        yy = cross_section_stress(z_ind,x_ind,2);
-        zz = cross_section_stress(z_ind,x_ind,3);
-        xy = cross_section_stress(z_ind,x_ind,4);
-        yz = cross_section_stress(z_ind,x_ind,5);
-        xz = cross_section_stress(z_ind,x_ind,6);
-        if isnan(xx) || isnan(yy) || isnan(zz) || isnan(xy) || isnan(yz) || isnan(xz)
-            cross_section_principal_stresses(z_ind,x_ind,:) = [nan nan nan];
-        else
-            stress_tensor = [xx xy xz; xy yy yz; xz yz zz];
-            [principal_dirns, principal_stresses] = eig(stress_tensor);
-            cross_section_principal_stresses(z_ind,x_ind,1) = principal_stresses(3,3);
-            cross_section_principal_stresses(z_ind,x_ind,2) = principal_stresses(2,2);
-            cross_section_principal_stresses(z_ind,x_ind,3) = principal_stresses(1,1);
-        end
+% Create vector of cross section nodes and use it to update connectivity indices
+cross_section_nodes = zeros(length(cross_section_orig_node_ind(:,1)), 3);
+for node = 1:length(cross_section_orig_node_ind(:,1))
+    cross_section_nodes(node,:) = nodes(cross_section_orig_node_ind(node),:);
+end
+for ele = 1:length(cross_section_connectivity(:,1))
+    for node = 1:4
+        [~,arg_min] = min(abs(cross_section_orig_node_ind - cross_section_connectivity(ele,node)));
+        cross_section_connectivity(ele,node) = arg_min;
+    end
+end
 
+% Used for y projection plotting the cross section
+cross_section_mean_y_val = zeros(length(cross_section_connectivity(:,1)),1);
+cross_section_min_y_node = zeros(length(cross_section_connectivity(:,1)),1);
+for ele=1:length(cross_section_connectivity(:,1))
+    cross_section_mean_y_val(ele) = mean(cross_section_nodes(cross_section_connectivity(ele,:),2));
+    [~,arg_min] = min(cross_section_nodes(cross_section_connectivity(ele,:),2));
+    cross_section_min_y_node(ele) = arg_min;
+end
+[~,cross_section_draw_order] = sort(cross_section_mean_y_val);
+
+
+% % Stress and strain cross section data
+% precision = 1000;
+% delta_x = max(scaled_displaced_nodes(:,1))-min(scaled_displaced_nodes(:,1));
+% delta_z = max(scaled_displaced_nodes(:,3))-min(scaled_displaced_nodes(:,3));
+% norm_delta_x = delta_x / (delta_x+delta_z);
+% norm_delta_z = delta_z / (delta_x+delta_z);
+% norm_precision = precision / max([norm_delta_x, norm_delta_z]);
+% x_precision = round(norm_precision * norm_delta_x);
+% z_precision = round(norm_precision * norm_delta_z);
+% x_space = linspace( min(scaled_displaced_nodes(:,1)), max(scaled_displaced_nodes(:,1)), x_precision);
+% z_space = linspace( max(scaled_displaced_nodes(:,3)), min(scaled_displaced_nodes(:,3)), z_precision);
+% [X,Z] = meshgrid(x_space, z_space);
+% cross_section_stress = zeros(z_precision, x_precision, 6);
+% cross_section_von_mises = zeros(z_precision, x_precision, 1);
+% x_ind = 0;
+% 
+% % Find those elements who are around the y axis
+% mid_plane_elements = [];
+% for ele=1:n_elements
+%     if min(scaled_displaced_nodes(connectivity(ele,:),2)) <= 0.0 && max(scaled_displaced_nodes(connectivity(ele,:),2)) >= 0.0
+%         mid_plane_elements(end+1) = ele;
+%     end
+% end
+% n_mid_plane_elements = length(mid_plane_elements);
+% 
+% % Populate the cross sectional space
+% for x=x_space
+%     z_ind = 0;
+%     x_ind = x_ind + 1;
+% 
+%     % Search for those elements whose x range surround the current x point
+%     mid_plane_elements_with_good_x = [];
+%     for ele_ind=1:n_mid_plane_elements
+%         ele_x_coords = scaled_displaced_nodes(connectivity(mid_plane_elements(ele_ind),:),1);
+%         if min(ele_x_coords) <= x && max(ele_x_coords) >= x
+%             mid_plane_elements_with_good_x(end+1) = mid_plane_elements(ele_ind);
+%         end
+%     end
+%     n_mid_plane_elements_with_good_x = length(mid_plane_elements_with_good_x);
+% 
+%     for z=z_space
+%         z_ind = z_ind + 1;
+% 
+%         found = false;
+%         ele_ind = 1;
+%         coord = [x 0.0 z];
+% 
+%         while ~found && ele_ind <= n_mid_plane_elements_with_good_x
+%             ele = mid_plane_elements_with_good_x(ele_ind);
+% 
+%             if min(scaled_displaced_nodes(connectivity(ele,:),3)) <= z && max(scaled_displaced_nodes(connectivity(ele,:),3)) >= z
+%                 if pt_in_tet(scaled_displaced_nodes(connectivity(ele,:),:), coord) ~= 0
+%                     found = true;
+%                 end
+% 
+%             end
+% 
+%             ele_ind = ele_ind + 1;
+%         end
+%         
+%         if found
+%             cross_section_stress(z_ind, x_ind, :) = elements_stress(ele,:);
+%             cross_section_von_mises(z_ind, x_ind, :) = elements_von_mises(ele,:);
+%         else
+%             cross_section_stress(z_ind, x_ind, :) = [nan, nan, nan, nan, nan, nan];
+%             cross_section_von_mises(z_ind, x_ind, :) = nan;
+%         end
+%     end
+% end
+% 
+% % Calculate principal stresses
+% cross_section_principal_stresses = zeros(z_precision,x_precision,3);
+% for x_ind =1:x_precision
+%     for z_ind=1:z_precision
+%         xx = cross_section_stress(z_ind,x_ind,1);
+%         yy = cross_section_stress(z_ind,x_ind,2);
+%         zz = cross_section_stress(z_ind,x_ind,3);
+%         xy = 0.5*cross_section_stress(z_ind,x_ind,4);
+%         yz = 0.5*cross_section_stress(z_ind,x_ind,5);
+%         xz = 0.5*cross_section_stress(z_ind,x_ind,6);
+%         if isnan(xx) || isnan(yy) || isnan(zz) || isnan(xy) || isnan(yz) || isnan(xz)
+%             cross_section_principal_stresses(z_ind,x_ind,:) = [nan nan nan];
+%         else
+%             stress_tensor = [xx xy xz; xy yy yz; xz yz zz];
+%             [~, principal_stresses] = eig(stress_tensor);
+%             cross_section_principal_stresses(z_ind,x_ind,1) = principal_stresses(3,3);
+%             cross_section_principal_stresses(z_ind,x_ind,2) = principal_stresses(2,2);
+%             cross_section_principal_stresses(z_ind,x_ind,3) = principal_stresses(1,1);
+%         end
+% 
+%     end
+% end
+
+% Remove outliers
+if remove_outliers
+    s1 = cross_section_principal_stresses(:,:,1);
+    s1 = s1(~isnan(cross_section_principal_stresses(:,:,1)));
+    s2 = cross_section_principal_stresses(:,:,2);
+    s2 = s2(~isnan(cross_section_principal_stresses(:,:,2)));
+    s3 = cross_section_principal_stresses(:,:,3);
+    s3 = s3(~isnan(cross_section_principal_stresses(:,:,3)));
+    sv = cross_section_von_mises(~isnan(cross_section_von_mises));
+    Q1 = [quantile(s1,0.25), quantile(s1,0.75)];
+    Q2 = [quantile(s2,0.25), quantile(s2,0.75)];
+    Q3 = [quantile(s3,0.25), quantile(s3,0.75)];
+    Qv = [quantile(sv,0.25), quantile(sv,0.75)];
+    IQR_1 = Q1(2)-Q1(1);
+    IQR_2 = Q2(2)-Q2(1);
+    IQR_3 = Q3(2)-Q3(1);
+    IQR_v = Qv(2)-Qv(1);
+    for x_ind =1:x_precision
+        for z_ind=1:z_precision
+            % Remove s1 outliers
+            if ~isnan(cross_section_principal_stresses(z_ind,x_ind,1))
+                if cross_section_principal_stresses(z_ind,x_ind,1) < (Q1(1)-1.5*IQR_1)
+                    cross_section_principal_stresses(z_ind,x_ind,1) = (Q1(1)-1.5*IQR_1);
+                elseif cross_section_principal_stresses(z_ind,x_ind,1) > (Q1(2)+1.5*IQR_1)
+                    cross_section_principal_stresses(z_ind,x_ind,1) = (Q1(2)+1.5*IQR_1);
+                end
+            end
+    
+            % Remove s2 outliers
+            if ~isnan(cross_section_principal_stresses(z_ind,x_ind,2))
+                if cross_section_principal_stresses(z_ind,x_ind,2) < (Q2(1)-1.5*IQR_2)
+                    cross_section_principal_stresses(z_ind,x_ind,2) = (Q2(1)-1.5*IQR_2);
+                elseif cross_section_principal_stresses(z_ind,x_ind,2) > (Q2(2)+1.5*IQR_2)
+                    cross_section_principal_stresses(z_ind,x_ind,2) = (Q2(2)+1.5*IQR_2);
+                end
+            end
+    
+            % Remove s3 outliers
+            if ~isnan(cross_section_principal_stresses(z_ind,x_ind,3))
+                if cross_section_principal_stresses(z_ind,x_ind,3) < (Q3(1)-1.5*IQR_3)
+                    cross_section_principal_stresses(z_ind,x_ind,3) = (Q3(1)-1.5*IQR_3);
+                elseif cross_section_principal_stresses(z_ind,x_ind,3) > (Q3(2)+1.5*IQR_3)
+                    cross_section_principal_stresses(z_ind,x_ind,3) = (Q3(2)+1.5*IQR_3);
+                end
+            end
+    
+            % Remove s4 outliers
+            if ~isnan(cross_section_von_mises(z_ind,x_ind))
+                if cross_section_von_mises(z_ind,x_ind) < (Qv(1)-1.5*IQR_v)
+                    cross_section_von_mises(z_ind,x_ind) = (Qv(1)-1.5*IQR_v);
+                elseif cross_section_von_mises(z_ind,x_ind) > (Qv(2)+1.5*IQR_v)
+                    cross_section_von_mises(z_ind,x_ind) = (Qv(2)+1.5*IQR_v);
+                end
+            end
+        end
     end
 end
 
 clear ele global_ind_start global_ind_end displacment_sub_vec node xx yy zz xy yz xz precision delta_x delta_z n_mid_plane_elements 
 clear ele_x_coords scale_factor mid_plane_elements_with_good_x norm_delta_x norm_delta_z norm_precision x_precision z_precision x_space 
-clear z_space x z x_ind z_ind coord found ele ele_ind mid_plane_elements n_mid_plane_elements_with_good_x
+clear z_space x z x_ind z_ind coord found ele ele_ind mid_plane_elements n_mid_plane_elements_with_good_x s1 s2 s3 sv Q1 Q2 Q3 Qv IQR_1 
+clear IQR_2 IQR_3 IQR_v principal_stresses stress_tensor cross_section_stress nodes_on_xz ele_nodes
 
 
 %% Visualization
@@ -545,7 +734,15 @@ view(0,90);
 axis equal
 saveas(gcf,'third_cross_section.png',"png")
 
-clear min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading s show_load show_fixed
+% Save
+save('strain.mat','elements_strain');
+save('stress.mat','elements_stress');
+save('displacement.mat','dimensional_displacement');
+save('von_mises.mat','cross_section_von_mises');
+save('principal_stress.mat','cross_section_principal_stresses');
+save('reaction.mat','reaction_load');
+
+clear min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading s show_load show_fixed make_sparse remove_outliers
 
 
 %% Helper functions

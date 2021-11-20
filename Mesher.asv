@@ -5,7 +5,7 @@ clear
 
 %% Parameters
 % Radii 
-r_head = 3.0;
+r_head = 6.5;
 r_shank = 3.0;
 r_body = 2.5;
 
@@ -25,7 +25,7 @@ thread_crest = 0.5;
 % Mesh
 num_height = 190;
 num_ring = 5;
-num_theta = 18;
+num_theta = ;
 
 % Render options
 render_mesh = false;

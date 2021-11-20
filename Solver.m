@@ -21,11 +21,11 @@ top_traction = 100e4;  % Pascals
     % 7 - Head
 node_types_that_are_fixed_in_x = [];
 node_types_that_are_fixed_in_y = [];
-node_types_that_are_fixed_in_z = [2, 3, 4];
+node_types_that_are_fixed_in_z = [1, 2, 3, 4];
 node_indices_that_are_fixed_in_x = [];
 node_indices_that_are_fixed_in_y = [];
 node_indices_that_are_fixed_in_z = [];
-fixed_node_z_range = [5.0, 10.5];  %mm
+fixed_node_z_range = [5.0, 15.5];  %mm
 
 
 %% Visualization options
@@ -124,8 +124,8 @@ for ele = 1:n_elements
 
     K_ele = squeeze(K_elements(ele,:,:));
     R_T_ele = R_T_elements(:, ele);
-    ele_x_coords = connectivity(ele,:);
-    global_ind_start = (ele_x_coords-1)*3+1;
+    ele_nodes = connectivity(ele,:);
+    global_ind_start = (ele_nodes-1)*3+1;
     global_ind_end = global_ind_start + 2;
 
     for i = 1:4
@@ -152,7 +152,7 @@ end
 K_global = sparse(K_global);
 R_global = R_T_global;
 
-clear K_elements R_T_elements R_T_global K_ele R_T_ele ele_x_coords global_ind_start global_ind_end i_ind_start i_ind_end j_ind_start j_ind_end ele i j;
+clear K_elements R_T_elements R_T_global K_ele R_T_ele ele_nodes global_ind_start global_ind_end i_ind_start i_ind_end j_ind_start j_ind_end ele i j;
 
 
 %% Application of fixed BC
@@ -208,7 +208,8 @@ displacement_mag = vecnorm(dimensional_displacement,2,2);
 
 % Node positions
 displaced_nodes = 1000.0*(nodes + dimensional_displacement);
-scaled_displaced_nodes = 1000.0*(nodes + (0.25 * ((max(nodes(:,3)) - min(nodes(:,3))) / max(abs(displacement))))*dimensional_displacement);
+scale_factor = 0.25*(max(nodes(:,3)) - min(nodes(:,3))) / max(abs(displacement));
+scaled_displaced_nodes = 1000.0*(nodes + scale_factor*dimensional_displacement);
 
 % Reaction forces
 reaction_load = K_global*displacement - R_global;
@@ -220,8 +221,6 @@ reaction_load_mag = vecnorm(reaction_load,2,2);
 elements_strain = zeros(n_elements, 6);
 elements_stress = zeros(n_elements, 6);
 elements_von_mises = zeros(n_elements, 1);
-nodes_strain = zeros(n_nodes, 7);
-nodes_stress = zeros(n_nodes, 7);
 for ele=1:n_elements
     % Calculate element stress and strain
     global_ind_start = 3*(connectivity(ele,:)-1) + 1;
@@ -239,41 +238,19 @@ for ele=1:n_elements
     yz = elements_stress(ele,5);
     xz = elements_stress(ele,6);
     elements_von_mises(ele,:) = sqrt(0.5*((xx-yy)^2.0+(yy-zz)^2+(zz-xx)^2+6.0*((xy^2)+(yz^2)+(xz^2))));
-
-    % Assign average stress and strain of all connected elements to each node
-    for node=1:4
-        nodes_strain(connectivity(ele,node),1:6) = elements_strain(ele,:);
-        nodes_strain(connectivity(ele,node),7) = nodes_strain(connectivity(ele,1),7) + 1;
-        nodes_stress(connectivity(ele,node),1:6) = elements_stress(ele,:);
-        nodes_stress(connectivity(ele,node),7) = nodes_stress(connectivity(ele,1),7) + 1;
-    end
-end
-nodes_strain = nodes_strain(:,1:6)./nodes_strain(:,7);
-nodes_stress = nodes_stress(:,1:6)./nodes_stress(:,7);
-nodes_von_mises = zeros(n_nodes, 1);
-for node=1:n_nodes
-    xx = nodes_stress(node,1);
-    yy = nodes_stress(node,2);
-    zz = nodes_stress(node,3);
-    xy = nodes_stress(node,4);
-    yz = nodes_stress(node,5);
-    xz = nodes_stress(node,6);
-    nodes_von_mises(node,:) = sqrt(0.5*((xx-yy)^2.0+(yy-zz)^2+(zz-xx)^2+6.0*((xy^2)+(yz^2)+(xz^2))));
 end
 
 % Stress and strain cross section data
-precision = 750;
-delta_x = max(nodes(:,1))-min(nodes(:,1));
-delta_z = max(nodes(:,3))-min(nodes(:,3));
+precision = 1000;
+delta_x = max(scaled_displaced_nodes(:,1))-min(scaled_displaced_nodes(:,1));
+delta_z = max(scaled_displaced_nodes(:,3))-min(scaled_displaced_nodes(:,3));
 norm_delta_x = delta_x / (delta_x+delta_z);
 norm_delta_z = delta_z / (delta_x+delta_z);
 norm_precision = precision / max([norm_delta_x, norm_delta_z]);
 x_precision = round(norm_precision * norm_delta_x);
 z_precision = round(norm_precision * norm_delta_z);
-x_space = linspace( min(nodes(:,1)), max(nodes(:,1)), x_precision);
-z_space = linspace( max(nodes(:,3)), min(nodes(:,3)), z_precision);
-delta_x = abs(x_space(2) - x_space(1));
-delta_z = abs(z_space(2) - z_space(1));
+x_space = linspace( min(scaled_displaced_nodes(:,1)), max(scaled_displaced_nodes(:,1)), x_precision);
+z_space = linspace( max(scaled_displaced_nodes(:,3)), min(scaled_displaced_nodes(:,3)), z_precision);
 [X,Z] = meshgrid(x_space, z_space);
 cross_section_stress = zeros(z_precision, x_precision, 6);
 cross_section_strain = zeros(z_precision, x_precision, 6);
@@ -283,7 +260,7 @@ x_ind = 0;
 % Find those elements who are around the y axis
 mid_plane_elements = [];
 for ele=1:n_elements
-    if min(nodes(connectivity(ele,:),2)) <= 0.0 && max(nodes(connectivity(ele,:),2)) >= 0.0
+    if min(scaled_displaced_nodes(connectivity(ele,:),2)) <= 0.0 && max(scaled_displaced_nodes(connectivity(ele,:),2)) >= 0.0
         mid_plane_elements(end+1) = ele;
     end
 end
@@ -297,7 +274,7 @@ for x=x_space
     % Search for those elements whose x range surround the current x point
     mid_plane_elements_with_good_x = [];
     for ele_ind=1:n_mid_plane_elements
-        ele_x_coords = nodes(connectivity(mid_plane_elements(ele_ind),:),1);
+        ele_x_coords = scaled_displaced_nodes(connectivity(mid_plane_elements(ele_ind),:),1);
         if min(ele_x_coords) <= x && max(ele_x_coords) >= x
             mid_plane_elements_with_good_x(end+1) = mid_plane_elements(ele_ind);
         end
@@ -314,8 +291,8 @@ for x=x_space
         while ~found && ele_ind <= n_mid_plane_elements_with_good_x
             ele = mid_plane_elements_with_good_x(ele_ind);
 
-            if min(nodes(connectivity(ele,:),3)) <= z && max(nodes(connectivity(ele,:),3)) >= z
-                if pt_in_tet(nodes(connectivity(ele,:),:), coord) == 1
+            if min(scaled_displaced_nodes(connectivity(ele,:),3)) <= z && max(scaled_displaced_nodes(connectivity(ele,:),3)) >= z
+                if pt_in_tet(scaled_displaced_nodes(connectivity(ele,:),:), coord) ~= 0
                     found = true;
                 end
 
@@ -336,8 +313,32 @@ for x=x_space
     end
 end
 
-clear ele global_ind_start global_ind_end displacment_sub_vec node xx yy zz xy yz xz precision delta_x delta_z n_mid_plane_elements ele_x_coords
-clear norm_delta_x norm_delta_z norm_precision x_precision z_precision x_space z_space x z x_ind z_ind coord found ele ele_ind mid_plane_elements
+% Calculate principal stresses
+cross_section_principal_stresses = zeros(z_precision,x_precision,3);
+for x_ind =1:x_precision
+    for z_ind=1:z_precision
+        xx = cross_section_stress(z_ind,x_ind,1);
+        yy = cross_section_stress(z_ind,x_ind,2);
+        zz = cross_section_stress(z_ind,x_ind,3);
+        xy = cross_section_stress(z_ind,x_ind,4);
+        yz = cross_section_stress(z_ind,x_ind,5);
+        xz = cross_section_stress(z_ind,x_ind,6);
+        if isnan(xx) || isnan(yy) || isnan(zz) || isnan(xy) || isnan(yz) || isnan(xz)
+            cross_section_principal_stresses(z_ind,x_ind,:) = [nan nan nan];
+        else
+            stress_tensor = [xx xy xz; xy yy yz; xz yz zz];
+            [principal_dirns, principal_stresses] = eig(stress_tensor);
+            cross_section_principal_stresses(z_ind,x_ind,1) = principal_stresses(3,3);
+            cross_section_principal_stresses(z_ind,x_ind,2) = principal_stresses(2,2);
+            cross_section_principal_stresses(z_ind,x_ind,3) = principal_stresses(1,1);
+        end
+
+    end
+end
+
+clear ele global_ind_start global_ind_end displacment_sub_vec node xx yy zz xy yz xz precision delta_x delta_z n_mid_plane_elements 
+clear ele_x_coords scale_factor mid_plane_elements_with_good_x norm_delta_x norm_delta_z norm_precision x_precision z_precision x_space 
+clear z_space x z x_ind z_ind coord found ele ele_ind mid_plane_elements n_mid_plane_elements_with_good_x
 
 
 %% Visualization
@@ -487,157 +488,10 @@ view(30,30);
 set(gcf,'Position',[1098 55 750 1000])
 saveas(gcf,'reaction_mag.png',"png")
 
-% Stress XX
+% Von Mises Stress cross-section
 figure(7)
 colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_stress(:,1), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
-title("X Normal Stress",'FontSize',16)
-c = colorbar('eastoutside');
-c.Label.String = 'σxx (MPa)';
-c.Label.FontSize = 12;
-c.FontSize = 12;
-set(gca,'xticklabel',[])
-set(gca,'yticklabel',[])
-set(gca,'zticklabel',[])
-h=gca;
-h.XAxis.TickLength = [0 0];
-h.YAxis.TickLength = [0 0];
-h.ZAxis.TickLength = [0 0];
-axis equal;
-view(30,30);
-set(gcf,'Position',[200 55 750 1000])
-saveas(gcf,'stress_xx.png',"png")
-
-% Stress YY
-figure(8)
-colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_stress(:,2), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
-title("Y Normal Stress",'FontSize',16)
-c = colorbar('eastoutside');
-c.Label.String = 'σyy (MPa)';
-c.Label.FontSize = 12;
-c.FontSize = 12;
-set(gca,'xticklabel',[])
-set(gca,'yticklabel',[])
-set(gca,'zticklabel',[])
-h=gca;
-h.XAxis.TickLength = [0 0];
-h.YAxis.TickLength = [0 0];
-h.ZAxis.TickLength = [0 0];
-axis equal;
-view(30,30);
-set(gcf,'Position',[1098 55 750 1000])
-saveas(gcf,'stress_yy.png',"png")
-
-% Stress ZZ
-figure(9)
-colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_stress(:,3), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
-title("Z Normal Stress",'FontSize',16)
-c = colorbar('eastoutside');
-c.Label.String = 'σzz (MPa)';
-c.Label.FontSize = 12;
-c.FontSize = 12;
-set(gca,'xticklabel',[])
-set(gca,'yticklabel',[])
-set(gca,'zticklabel',[])
-h=gca;
-h.XAxis.TickLength = [0 0];
-h.YAxis.TickLength = [0 0];
-h.ZAxis.TickLength = [0 0];
-axis equal;
-view(30,30);
-set(gcf,'Position',[200 55 750 1000])
-saveas(gcf,'stress_zz.png',"png")
-
-% Stress XY
-figure(10)
-colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_stress(:,4), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
-title("XY Shear Stress",'FontSize',16)
-c = colorbar('eastoutside');
-c.Label.String = 'σxy (MPa)';
-c.Label.FontSize = 12;
-c.FontSize = 12;
-set(gca,'xticklabel',[])
-set(gca,'yticklabel',[])
-set(gca,'zticklabel',[])
-h=gca;
-h.XAxis.TickLength = [0 0];
-h.YAxis.TickLength = [0 0];
-h.ZAxis.TickLength = [0 0];
-axis equal;
-view(30,30);
-set(gcf,'Position',[1098 55 750 1000])
-saveas(gcf,'stress_xy.png',"png")
-
-% Stress YZ
-figure(11)
-colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_stress(:,5), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
-title("YZ Shear Stress",'FontSize',16)
-c = colorbar('eastoutside');
-c.Label.String = 'σyz (MPa)';
-c.Label.FontSize = 12;
-c.FontSize = 12;
-set(gca,'xticklabel',[])
-set(gca,'yticklabel',[])
-set(gca,'zticklabel',[])
-h=gca;
-h.XAxis.TickLength = [0 0];
-h.YAxis.TickLength = [0 0];
-h.ZAxis.TickLength = [0 0];
-axis equal;
-view(30,30);
-set(gcf,'Position',[200 55 750 1000])
-saveas(gcf,'stress_yz.png',"png")
-
-% Stress XZ
-figure(12)
-colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_stress(:,6), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
-title("XZ Shear Stress",'FontSize',16)
-c = colorbar('eastoutside');
-c.Label.String = 'σxz (MPa)';
-c.Label.FontSize = 12;
-c.FontSize = 12;
-set(gca,'xticklabel',[])
-set(gca,'yticklabel',[])
-set(gca,'zticklabel',[])
-h=gca;
-h.XAxis.TickLength = [0 0];
-h.YAxis.TickLength = [0 0];
-h.ZAxis.TickLength = [0 0];
-axis equal;
-view(30,30);
-set(gcf,'Position',[1098 55 750 1000])
-saveas(gcf,'stress_xz.png',"png")
-
-% Von Mises Stress
-figure(13)
-colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_von_mises(:,1), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
-title("Von Mises Stress",'FontSize',16)
-c = colorbar('eastoutside');
-c.Label.String = 'σv (MPa)';
-c.Label.FontSize = 12;
-c.FontSize = 12;
-set(gca,'xticklabel',[])
-set(gca,'yticklabel',[])
-set(gca,'zticklabel',[])
-h=gca;
-h.XAxis.TickLength = [0 0];
-h.YAxis.TickLength = [0 0];
-h.ZAxis.TickLength = [0 0];
-axis equal;
-view(30,30);
-set(gcf,'Position',[200 55 750 1000])
-saveas(gcf,'von_mises.png',"png")
-
-% Von Mises Stress cross-section
-figure(14)
-colormap jet
-s = surf(1000.0*X,1000.0*Z,1.0e-6*cross_section_von_mises);
+s = surf(X,Z,1.0e-6*cross_section_von_mises);
 s.EdgeAlpha = 0.0;
 s.FaceColor = 'interp';
 title("Von Mises Stress Y=0",'FontSize',16)
@@ -647,13 +501,51 @@ c.Label.FontSize = 12;
 c.FontSize = 12;
 xlabel('x [mm]')
 ylabel('z [mm]')
-set(gcf,'Position',[1098 55 750 1000])
-ylim(1000.0*[min(nodes(:,3)) - 0.05*(max(nodes(:,3)) - min(nodes(:,3))), max(nodes(:,3)) + 0.05*(max(nodes(:,3)) - min(nodes(:,3)))])
+set(gcf,'Position',[200 55 750 1000])
+ylim([min(scaled_displaced_nodes(:,3)) - 0.05*(max(scaled_displaced_nodes(:,3)) - min(scaled_displaced_nodes(:,3))), max(scaled_displaced_nodes(:,3)) + 0.05*(max(scaled_displaced_nodes(:,3)) - min(scaled_displaced_nodes(:,3)))])
 view(0,90);
 axis equal
 saveas(gcf,'von_mises_cross_section.png',"png")
 
-clear min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading s
+% 1st principal in cross-section
+figure(8)
+colormap jet
+s = surf(X,Z,1.0e-6*cross_section_principal_stresses(:,:,1));
+s.EdgeAlpha = 0.0;
+s.FaceColor = 'interp';
+title("1st Principal Stress Y=0",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'σ1 (MPa)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+xlabel('x [mm]')
+ylabel('z [mm]')
+set(gcf,'Position',[1098 55 750 1000])
+ylim([min(scaled_displaced_nodes(:,3)) - 0.05*(max(scaled_displaced_nodes(:,3)) - min(scaled_displaced_nodes(:,3))), max(scaled_displaced_nodes(:,3)) + 0.05*(max(scaled_displaced_nodes(:,3)) - min(scaled_displaced_nodes(:,3)))])
+view(0,90);
+axis equal
+saveas(gcf,'first_cross_section.png',"png")
+
+% 3rd principal in cross-section
+figure(9)
+colormap jet
+s = surf(X,Z,1.0e-6*cross_section_principal_stresses(:,:,3));
+s.EdgeAlpha = 0.0;
+s.FaceColor = 'interp';
+title("3rd Principal Stress Y=0",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'σ3 (MPa)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+xlabel('x [mm]')
+ylabel('z [mm]')
+set(gcf,'Position',[200 55 750 1000])
+ylim([min(scaled_displaced_nodes(:,3)) - 0.05*(max(scaled_displaced_nodes(:,3)) - min(scaled_displaced_nodes(:,3))), max(scaled_displaced_nodes(:,3)) + 0.05*(max(scaled_displaced_nodes(:,3)) - min(scaled_displaced_nodes(:,3)))])
+view(0,90);
+axis equal
+saveas(gcf,'third_cross_section.png',"png")
+
+clear min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading s show_load show_fixed
 
 
 %% Helper functions
@@ -681,6 +573,10 @@ end
 
 function result = pt_in_tet(tet,pt)
         
+    % Scale
+    tet = tet * 1000.0;
+    pt = pt * 1000.0;
+
     % Check if in interior
     result = 0;
     node_list = [1 2 3 4; 2 3 4 1; 1 2 4 3; 1 3 4 2];
@@ -696,6 +592,19 @@ function result = pt_in_tet(tet,pt)
         ind = ind + 1;
     end
 
+    % Check if on surfaces
+    node_list = [1 2 3; 2 3 4; 1 2 4; 1 3 4];
+    ind = 1;
+    while result==0 && ind <= 4
+        a = tet(node_list(ind,1),:);
+        b = tet(node_list(ind,2),:);
+        c = tet(node_list(ind,3),:);
+        if in_triangle(pt,a,b,c)
+            result = 2;
+        end
+        ind = ind + 1;
+    end
+
 end
 
 function val = same_side_3D(p1,p2,a,b,c)
@@ -706,5 +615,46 @@ function val = same_side_3D(p1,p2,a,b,c)
         val = 1;
     else
         val = 0;
+    end
+end
+
+function val = in_triangle(p1,a,b,c)
+    val = 0;
+    normal = cross(b-a, c-a);
+
+    % If the point lies on the triangle's plane, project the triangle and
+    % determine if the point inside the 2D projection
+    if abs(dot(normal,(p1-a))) <= 1.0e-6
+
+        % Project onto xy plane
+        if (abs(a(1)-b(1)) >= 1.0e-6 || abs(a(1)-c(1)) >= 1.0e-6) && (abs(a(2)-b(2)) >= 1.0e-6 || abs(a(2)-c(2)) >= 1.0e-6)
+            a_proj = a(1:2);
+            b_proj = b(1:2);
+            c_proj = c(1:2);
+            p1_proj = p1(1:2);
+            poly_proj = [a_proj; b_proj; c_proj];
+
+        % Project onto yz plane
+        elseif (abs(a(3)-b(3)) >= 1.0e-6 || abs(a(3)-c(3)) >= 1.0e-6) && (abs(a(2)-b(2)) >= 1.0e-6 || abs(a(2)-c(2)) >= 1.0e-6)
+            a_proj = a(2:3);
+            b_proj = b(2:3);
+            c_proj = c(2:3);
+            p1_proj = p1(2:3);
+            poly_proj = [a_proj; b_proj; c_proj];
+
+        % Project onto xz plane
+        elseif (abs(a(1)-b(1)) >= 1.0e-6 || abs(a(1)-c(1)) >= 1.0e-6) && (abs(a(3)-b(3)) >= 1.0e-6 || abs(a(3)-c(3)) >= 1.0e-6)
+            a_proj = [a(1), a(3)];
+            b_proj = [b(1), b(3)];
+            c_proj = [c(1), c(3)];
+            p1_proj = [p1(1), p1(3)];
+            poly_proj = [a_proj; b_proj; c_proj];
+
+        end
+
+        if inpolygon(p1_proj(1), p1_proj(2), poly_proj(:,1)', poly_proj(:,2)')
+            val = 1;
+        end
+
     end
 end

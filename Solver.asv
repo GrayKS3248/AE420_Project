@@ -9,7 +9,7 @@ E = 200e9;    % Pascals
 v = 0.30;     % Unitless
 
 % Loading
-top_traction = 100e5;  % Pascals
+top_traction = 100e4;  % Pascals
 
 % Boundary conditions
     % 1 - Body
@@ -25,7 +25,7 @@ node_types_that_are_fixed_in_z = [2, 3, 4];
 node_indices_that_are_fixed_in_x = [];
 node_indices_that_are_fixed_in_y = [];
 node_indices_that_are_fixed_in_z = [];
-fixed_node_z_range = [5.0, 15.5];  %mm
+fixed_node_z_range = [5.0, 10.5];  %mm
 
 
 %% Visualization options
@@ -124,8 +124,8 @@ for ele = 1:n_elements
 
     K_ele = squeeze(K_elements(ele,:,:));
     R_T_ele = R_T_elements(:, ele);
-    ele_nodes = connectivity(ele,:);
-    global_ind_start = (ele_nodes-1)*3+1;
+    ele_x_coords = connectivity(ele,:);
+    global_ind_start = (ele_x_coords-1)*3+1;
     global_ind_end = global_ind_start + 2;
 
     for i = 1:4
@@ -152,7 +152,7 @@ end
 K_global = sparse(K_global);
 R_global = R_T_global;
 
-clear K_elements R_T_elements R_T_global K_ele R_T_ele ele_nodes global_ind_start global_ind_end i_ind_start i_ind_end j_ind_start j_ind_end ele i j;
+clear K_elements R_T_elements R_T_global K_ele R_T_ele ele_x_coords global_ind_start global_ind_end i_ind_start i_ind_end j_ind_start j_ind_end ele i j;
 
 
 %% Application of fixed BC
@@ -237,8 +237,8 @@ for ele=1:n_elements
     zz = elements_stress(ele,3);
     xy = elements_stress(ele,4);
     yz = elements_stress(ele,5);
-    zx = elements_stress(ele,6);
-    elements_von_mises(ele,:) = 0.5*((xx-yy)^2.0+(yy-zz)^2+(zz-xx)^2+6.0*((xy^2)+(yz^2)+(zx^2)));
+    xz = elements_stress(ele,6);
+    elements_von_mises(ele,:) = sqrt(0.5*((xx-yy)^2.0+(yy-zz)^2+(zz-xx)^2+6.0*((xy^2)+(yz^2)+(xz^2))));
 
     % Assign average stress and strain of all connected elements to each node
     for node=1:4
@@ -250,12 +250,98 @@ for ele=1:n_elements
 end
 nodes_strain = nodes_strain(:,1:6)./nodes_strain(:,7);
 nodes_stress = nodes_stress(:,1:6)./nodes_stress(:,7);
+nodes_von_mises = zeros(n_nodes, 1);
+for node=1:n_nodes
+    xx = nodes_stress(node,1);
+    yy = nodes_stress(node,2);
+    zz = nodes_stress(node,3);
+    xy = nodes_stress(node,4);
+    yz = nodes_stress(node,5);
+    xz = nodes_stress(node,6);
+    nodes_von_mises(node,:) = sqrt(0.5*((xx-yy)^2.0+(yy-zz)^2+(zz-xx)^2+6.0*((xy^2)+(yz^2)+(xz^2))));
+end
 
-clear ele global_ind_start global_ind_end displacment_sub_vec node
+% Stress and strain cross section data
+precision = 750;
+delta_x = max(nodes(:,1))-min(nodes(:,1));
+delta_z = max(nodes(:,3))-min(nodes(:,3));
+norm_delta_x = delta_x / (delta_x+delta_z);
+norm_delta_z = delta_z / (delta_x+delta_z);
+norm_precision = precision / max([norm_delta_x, norm_delta_z]);
+x_precision = round(norm_precision * norm_delta_x);
+z_precision = round(norm_precision * norm_delta_z);
+x_space = linspace( min(nodes(:,1)), max(nodes(:,1)), x_precision);
+z_space = linspace( max(nodes(:,3)), min(nodes(:,3)), z_precision);
+delta_x = abs(x_space(2) - x_space(1));
+delta_z = abs(z_space(2) - z_space(1));
+[X,Z] = meshgrid(x_space, z_space);
+cross_section_stress = zeros(z_precision, x_precision, 6);
+cross_section_strain = zeros(z_precision, x_precision, 6);
+cross_section_von_mises = zeros(z_precision, x_precision, 1);
+x_ind = 0;
+
+% Find those elements who are around the y axis
+mid_plane_elements = [];
+for ele=1:n_elements
+    if min(nodes(connectivity(ele,:),2)) <= 0.0 && max(nodes(connectivity(ele,:),2)) >= 0.0
+        mid_plane_elements(end+1) = ele;
+    end
+end
+n_mid_plane_elements = length(mid_plane_elements);
+
+% Populate the cross sectional space
+for x=x_space
+    z_ind = 0;
+    x_ind = x_ind + 1;
+
+    % Search for those elements whose x range surround the current x point
+    mid_plane_elements_with_good_x = [];
+    for ele_ind=1:n_mid_plane_elements
+        ele_x_coords = nodes(connectivity(mid_plane_elements(ele_ind),:),1);
+        if min(ele_x_coords) <= x && max(ele_x_coords) >= x
+            mid_plane_elements_with_good_x(end+1) = mid_plane_elements(ele_ind);
+        end
+    end
+    n_mid_plane_elements_with_good_x = length(mid_plane_elements_with_good_x);
+
+    for z=z_space
+        z_ind = z_ind + 1;
+
+        found = false;
+        ele_ind = 1;
+        coord = [x 0.0 z];
+
+        while ~found && ele_ind <= n_mid_plane_elements_with_good_x
+            ele = mid_plane_elements_with_good_x(ele_ind);
+
+            if min(nodes(connectivity(ele,:),3)) <= z && max(nodes(connectivity(ele,:),3)) >= z
+                if pt_in_tet(nodes(connectivity(ele,:),:), coord) == 1
+                    found = true;
+                end
+
+            end
+
+            ele_ind = ele_ind + 1;
+        end
+        
+        if found
+            cross_section_stress(z_ind, x_ind, :) = elements_stress(ele,:);
+            cross_section_strain(z_ind, x_ind, :) = elements_strain(ele,:);
+            cross_section_von_mises(z_ind, x_ind, :) = elements_von_mises(ele,:);
+        else
+            cross_section_stress(z_ind, x_ind, :) = [nan, nan, nan, nan, nan, nan];
+            cross_section_strain(z_ind, x_ind, :) = [nan, nan, nan, nan, nan, nan];
+            cross_section_von_mises(z_ind, x_ind, :) = nan;
+        end
+    end
+end
+
+clear ele global_ind_start global_ind_end displacment_sub_vec node xx yy zz xy yz xz precision delta_x delta_z n_mid_plane_elements ele_x_coords
+clear norm_delta_x norm_delta_z norm_precision x_precision z_precision x_space z_space x z x_ind z_ind coord found ele ele_ind mid_plane_elements
 
 
 %% Visualization
-% Displacement magnitude
+% Problem definition
 figure(1)
 colormap jet
 if show_fixed
@@ -280,7 +366,7 @@ if show_load
 end
 trisurf(ELEMENT_TRIANGULATION.freeBoundary, displaced_nodes(:,1), displaced_nodes(:,2), displaced_nodes(:,3), 1000.0*displacement_mag, 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
 hold off
-title("Displaced Mesh",'FontSize',16)
+title("Problem Definition",'FontSize',16)
 xlabel('mm')
 ylabel('mm')
 zlabel('mm')
@@ -294,7 +380,7 @@ end
 axis equal;
 view(30,30);
 set(gcf,'Position',[200 55 750 1000])
-saveas(gcf,'displaced.png',"png")
+saveas(gcf,'problem_def.png',"png")
 
 % Scaled displacement magnitude
 figure(2)
@@ -527,7 +613,47 @@ view(30,30);
 set(gcf,'Position',[1098 55 750 1000])
 saveas(gcf,'stress_xz.png',"png")
 
-clear min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading
+% Von Mises Stress
+figure(13)
+colormap jet
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1.0e-6*nodes_von_mises(:,1), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
+title("Von Mises Stress",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'σv (MPa)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+set(gca,'xticklabel',[])
+set(gca,'yticklabel',[])
+set(gca,'zticklabel',[])
+h=gca;
+h.XAxis.TickLength = [0 0];
+h.YAxis.TickLength = [0 0];
+h.ZAxis.TickLength = [0 0];
+axis equal;
+view(30,30);
+set(gcf,'Position',[200 55 750 1000])
+saveas(gcf,'von_mises.png',"png")
+
+% Von Mises Stress cross-section
+figure(14)
+colormap jet
+s = surf(1000.0*X,1000.0*Z,1.0e-6*cross_section_von_mises);
+s.EdgeAlpha = 0.0;
+s.FaceColor = 'interp';
+title("Von Mises Stress Y=0",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'σv (MPa)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+xlabel('x [mm]')
+ylabel('z [mm]')
+set(gcf,'Position',[1098 55 750 1000])
+ylim(1000.0*[min(nodes(:,3)) - 0.05*(max(nodes(:,3)) - min(nodes(:,3))), max(nodes(:,3)) + 0.05*(max(nodes(:,3)) - min(nodes(:,3)))])
+view(0,90);
+axis equal
+saveas(gcf,'von_mises_cross_section.png',"png")
+
+clear min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading s
 
 
 %% Helper functions
@@ -553,3 +679,32 @@ function vectarrow(p0,p1,head)
   end
 end
 
+function result = pt_in_tet(tet,pt)
+        
+    % Check if in interior
+    result = 0;
+    node_list = [1 2 3 4; 2 3 4 1; 1 2 4 3; 1 3 4 2];
+    ind = 1;
+    while result==0 && ind <= 4
+        a = tet(node_list(ind,1),:);
+        b = tet(node_list(ind,2),:);
+        c = tet(node_list(ind,3),:);
+        d = tet(node_list(ind,4),:);
+        if same_side_3D(pt,a,b,c,d) && same_side_3D(pt,b,c,d,a) && same_side_3D(pt,c,d,a,b) && same_side_3D(pt,d,a,b,c)
+            result = 1;
+        end
+        ind = ind + 1;
+    end
+
+end
+
+function val = same_side_3D(p1,p2,a,b,c)
+    normal = cross(b-a, c-a);
+    d1 = dot(normal, (p1-a));
+    d2 = dot(normal, (p2-a));
+    if sign(d1) == sign(d2)
+        val = 1;
+    else
+        val = 0;
+    end
+end

@@ -5,7 +5,7 @@ clear
 
 %% Parameters
 % Radii 
-r_head = 6.5;
+r_head = 3.0;
 r_shank = 3.0;
 r_body = 2.5;
 

@@ -5,11 +5,11 @@ clear
 
 %% Problem definition
 % Material properties
-E = 200e9;  % Pascals
+E = 200e9;    % Pascals
 v = 0.30;     % Unitless
 
 % Loading
-top_traction = 100e6;  % Pascals
+top_traction = 100e5;  % Pascals
 
 % Boundary conditions
     % 1 - Body
@@ -19,9 +19,9 @@ top_traction = 100e6;  % Pascals
     % 5 - Shank
     % 6 - Shank to head transition
     % 7 - Head
-node_types_that_are_fixed_in_x = [1, 2, 3, 4, 5];
-node_types_that_are_fixed_in_y = [1, 2, 3, 4, 5];
-node_types_that_are_fixed_in_z = [1, 2, 3, 4, 5];
+node_types_that_are_fixed_in_x = [];
+node_types_that_are_fixed_in_y = [];
+node_types_that_are_fixed_in_z = [2, 3, 4];
 node_indices_that_are_fixed_in_x = [];
 node_indices_that_are_fixed_in_y = [];
 node_indices_that_are_fixed_in_z = [];
@@ -55,6 +55,7 @@ n_elements = length(connectivity(:,1));
 K_elements = zeros(n_elements, 12, 12);
 top_z = max(nodes(:,3));
 R_T_elements = zeros(12, n_elements);
+dN_elements = zeros(n_elements, 6,12);
 
 for ele = 1:n_elements
 
@@ -79,18 +80,17 @@ for ele = 1:n_elements
     k = [k1, k2, k3, k4];
 
     % Volume calculation
-    volume = det([1 P1'; 1 P2'; 1 P3'; 1 P4']) / 6.0;
+    volume = abs(det([1 P1'; 1 P2'; 1 P3'; 1 P4']) / 6.0);
 
     % Solve for dN
-    dN = zeros(6,12);
     for node=1:4
-        dN(:,3*(node-1)+1) = [k(node)*N(node,1); 0.0; 0.0; k(node)*N(node,2); 0.0; k(node)*N(node,3)];
-        dN(:,3*(node-1)+2) = [0.0; k(node)*N(node,2); 0.0; k(node)*N(node,1); k(node)*N(node,3); 0.0];
-        dN(:,3*(node-1)+3) = [0.0; 0.0; k(node)*N(node,3); 0.0; k(node)*N(node,2); k(node)*N(node,1)];
+        dN_elements(ele,:,3*(node-1)+1) = [k(node)*N(node,1); 0.0; 0.0; k(node)*N(node,2); 0.0; k(node)*N(node,3)];
+        dN_elements(ele,:,3*(node-1)+2) = [0.0; k(node)*N(node,2); 0.0; k(node)*N(node,1); k(node)*N(node,3); 0.0];
+        dN_elements(ele,:,3*(node-1)+3) = [0.0; 0.0; k(node)*N(node,3); 0.0; k(node)*N(node,2); k(node)*N(node,1)];
     end
 
     % Solve for the element stiffness
-    K_elements(ele,:,:) = (dN'*E_mat*dN)*volume;
+    K_elements(ele,:,:) = (squeeze(dN_elements(ele,:,:))'*E_mat*squeeze(dN_elements(ele,:,:)))*volume;
 
     % Calculate top of screw head traction loading
     if sum(nodes(connectivity(ele,:),3) == top_z) == 3
@@ -111,15 +111,9 @@ for ele = 1:n_elements
             end
         end
     end
-
-    % TODO: IMPLEMENT BODY FORCES
-    % TODO: IMPLEMENT POINT LOADS
-    % TODO: IMPLEMENT TORSION
-    % TODO: IMPLEMENT BENDING
-
 end
 
-clear P1 P2 P3 P4 N1 N2 N3 N4 N k1 k2 k3 k4 k dN ele node top_of_head_nodes coords area total_load load_per_node top_z volume
+clear P1 P2 P3 P4 N1 N2 N3 N4 N k1 k2 k3 k4 k ele node top_of_head_nodes coords area total_load load_per_node top_z volume
 
 
 %% Stiffness and load assembly
@@ -208,11 +202,25 @@ clear K_global_trimmed R_global_trimmed displacement_trimmed num_added indices_2
 
 
 %% Post processing
-displaced_nodes = 1000.0*(nodes + reshape(displacement,3,[])');
-scaled_displaced_nodes = 1000.0*(nodes + (0.25 * ((max(nodes(:,3)) - min(nodes(:,3))) / max(abs(displacement))))*reshape(displacement,3,[])');
-norm_node_loading = reshape(R_global,3,[])';
-norm_node_loading = norm_node_loading / max(vecnorm(norm_node_loading,2,2));
-displacement_mag = vecnorm(reshape(displacement,3,[])',2,2);
+% Displacement
+dimensional_displacement = reshape(displacement,3,[])';
+displacement_mag = vecnorm(dimensional_displacement,2,2);
+
+% Node positions
+displaced_nodes = 1000.0*(nodes + dimensional_displacement);
+scaled_displaced_nodes = 1000.0*(nodes + (0.25 * ((max(nodes(:,3)) - min(nodes(:,3))) / max(abs(displacement))))*dimensional_displacement);
+
+% Reaction forces
+reaction_load = K_global*displacement - R_global;
+reaction_load(reaction_load<1.0e-5) = 0.0;
+reaction_load = reshape(reaction_load,3,[])';
+reaction_load_mag = vecnorm(reaction_load,2,2);
+
+% TODO Stress
+
+
+% TODO Strain
+
 
 
 %% Visualization
@@ -226,6 +234,8 @@ if show_fixed
     z_fixed_scatter = scatter3(1000.0*nodes(z_fixed',1), 1000.0*nodes(z_fixed',2), 1000.0*nodes(z_fixed',3), 60, '.', 'm');
 end
 if show_load
+    norm_node_loading = reshape(R_global,3,[])';
+    norm_node_loading = norm_node_loading / max(vecnorm(norm_node_loading,2,2));
     min_z = 1000.0*min(nodes(:,3));
     max_z = 1000.0*max(nodes(:,3));
     for node=1:n_nodes
@@ -237,7 +247,7 @@ if show_load
         end
     end
 end
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, displaced_nodes(:,1), displaced_nodes(:,2), displaced_nodes(:,3), 1000.0*displacement_mag, 'EdgeAlpha', '0.1');
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, displaced_nodes(:,1), displaced_nodes(:,2), displaced_nodes(:,3), 1000.0*displacement_mag, 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
 hold off
 title("Displaced Mesh",'FontSize',16)
 xlabel('mm')
@@ -258,8 +268,7 @@ saveas(gcf,'displaced.png',"png")
 % Scaled displacement magnitude
 figure(2)
 colormap jet
-trisurf(ELEMENT_TRIANGULATION.freeBoundary, scaled_displaced_nodes(:,1), scaled_displaced_nodes(:,2), scaled_displaced_nodes(:,3), 1000.0*displacement_mag, 'EdgeAlpha', '0.1');
-hold off
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, scaled_displaced_nodes(:,1), scaled_displaced_nodes(:,2), scaled_displaced_nodes(:,3), 1000.0*displacement_mag, 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
 title("Scaled Displaced Mesh",'FontSize',16)
 c = colorbar('eastoutside');
 c.Label.String = 'Displacement Magnitude (mm)';
@@ -277,7 +286,91 @@ view(30,30);
 set(gcf,'Position',[1098 55 750 1000])
 saveas(gcf,'scaled_displaced.png',"png")
 
-clear min_z max_z node p0 p1
+% X displacement
+figure(3)
+colormap jet
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1000.0*dimensional_displacement(:,1), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
+title("X Displacement",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'X Displacement (mm)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+set(gca,'xticklabel',[])
+set(gca,'yticklabel',[])
+set(gca,'zticklabel',[])
+h=gca;
+h.XAxis.TickLength = [0 0];
+h.YAxis.TickLength = [0 0];
+h.ZAxis.TickLength = [0 0];
+axis equal;
+view(30,30);
+set(gcf,'Position',[200 55 750 1000])
+saveas(gcf,'x_displacement.png',"png")
+
+% Y displacement
+figure(4)
+colormap jet
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1000.0*dimensional_displacement(:,2), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
+title("Y Displacement",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'Y Displacement (mm)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+set(gca,'xticklabel',[])
+set(gca,'yticklabel',[])
+set(gca,'zticklabel',[])
+h=gca;
+h.XAxis.TickLength = [0 0];
+h.YAxis.TickLength = [0 0];
+h.ZAxis.TickLength = [0 0];
+axis equal;
+view(30,30);
+set(gcf,'Position',[1098 55 750 1000])
+saveas(gcf,'y_displacement.png',"png")
+
+% Z displacement
+figure(5)
+colormap jet
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), 1000.0*dimensional_displacement(:,3), 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
+title("Z Displacement",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'Z Displacement (mm)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+set(gca,'xticklabel',[])
+set(gca,'yticklabel',[])
+set(gca,'zticklabel',[])
+h=gca;
+h.XAxis.TickLength = [0 0];
+h.YAxis.TickLength = [0 0];
+h.ZAxis.TickLength = [0 0];
+axis equal;
+view(30,30);
+set(gcf,'Position',[200 55 750 1000])
+saveas(gcf,'z_displacement.png',"png")
+
+% Reaction load magnitude
+figure(6)
+colormap jet
+trisurf(ELEMENT_TRIANGULATION.freeBoundary, 1000.0*nodes(:,1), 1000.0*nodes(:,2), 1000.0*nodes(:,3), reaction_load_mag, 'EdgeAlpha', '0.1', 'FaceColor', 'interp');
+title("Reaction Load Magnitude",'FontSize',16)
+c = colorbar('eastoutside');
+c.Label.String = 'Load (N)';
+c.Label.FontSize = 12;
+c.FontSize = 12;
+set(gca,'xticklabel',[])
+set(gca,'yticklabel',[])
+set(gca,'zticklabel',[])
+h=gca;
+h.XAxis.TickLength = [0 0];
+h.YAxis.TickLength = [0 0];
+h.ZAxis.TickLength = [0 0];
+axis equal;
+view(30,30);
+set(gcf,'Position',[1098 55 750 1000])
+saveas(gcf,'reaction_mag.png',"png")
+
+clear min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading
 
 
 %% Helper functions

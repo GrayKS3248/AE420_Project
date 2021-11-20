@@ -18,14 +18,14 @@ l_tip = 5.0;
 
 % Thread
 thread_number = 0.5;
-thread_depth = 0.75;
+thread_depth = 0.0;%0.35;
 thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 190;
-num_ring = 5;
-num_theta = 18;
+num_height = 55;
+num_ring = 2;
+num_theta = 9;
 
 % Render options
 render_mesh = false;
@@ -56,11 +56,24 @@ arg = struct('rh',r_head,...
 total_length = arg.lt + arg.lb + arg.ls + arg.lst + arg.lh;
 num_nodes = num_height*num_ring*num_theta;
 
-% Calculate height, radius, and theta space
+% Calculate height, ring, and theta space
 height_list = linspace(0.0,total_length,num_height);
 radius_list = linspace(1.0,0.0,num_ring+2);
 theta_list = linspace(0.0,2.0*pi,num_theta+1);
 theta_list = theta_list(1:end-1);
+
+% Determine radius as a function of height to adjust
+radius_as_height = zeros(num_height,1);
+count = 1;
+for height = linspace(0.0,total_length,500)
+    radius_at_height_avg = 0.0;
+    for theta = linspace(0.0,2.0*pi,100)
+        radius_at_height_avg = radius_at_height_avg + get_r(theta,height,arg);
+    end
+    radius_at_height_avg = radius_at_height_avg / 100.0;
+    radius(count,1) = radius_at_height_avg;
+    count = count + 1;
+end
 
 X = zeros(num_nodes, 1);
 Y = zeros(num_nodes, 1);
@@ -383,7 +396,7 @@ close all
 
 if vis
     figure(1)
-    trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.25', 'FaceColor', [0.75, 0.75, 0.75]);
+    trisurf(ELEMENT_TRIANGULATION.freeBoundary, X, Y, Z, 'EdgeAlpha', '0.1');
     title("Surface Mesh")
     xlabel('mm')
     ylabel('mm')

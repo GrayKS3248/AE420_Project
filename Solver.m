@@ -25,7 +25,7 @@ node_types_that_are_fixed_in_z = [1, 2, 3, 4];
 node_indices_that_are_fixed_in_x = [];
 node_indices_that_are_fixed_in_y = [];
 node_indices_that_are_fixed_in_z = [];
-fixed_node_z_range = [5.0, 36.5];  %mm
+fixed_node_z_range = [5.0, 15.9];  %mm
 
 
 %% Simulation and visualization options
@@ -33,6 +33,8 @@ make_sparse = true;
 show_fixed = true;
 show_load = true;
 visualize = true;
+cross_section = true;
+save_data = true;
 
 
 %% Load mesh
@@ -270,137 +272,139 @@ for ele=1:n_elements
     elements_principal(ele,:) = flip(eig([xx xy xz; xy yy yz; xz yz zz])');
 end
 
-% Take a cross section of the mesh
-cross_section_connectivity = zeros(0,4);
-cross_section_orig_ele_ind = zeros(0,1);
-for ele = 1:n_elements
-    ele_nodes = nodes(connectivity(ele,:),2);
-
-    % Tet has at least one node on the XZ plane
-    if min(abs(ele_nodes)) < 1.0e-10
-        nodes_on_xz = abs(ele_nodes) < 1.0e-10;
-
-        % Tet has a face on the XZ plane
-        if sum(nodes_on_xz) == 3
+if cross_section
+    % Take a cross section of the mesh
+    cross_section_connectivity = zeros(0,4);
+    cross_section_orig_ele_ind = zeros(0,1);
+    for ele = 1:n_elements
+        ele_nodes = nodes(connectivity(ele,:),2);
+    
+        % Tet has at least one node on the XZ plane
+        if min(abs(ele_nodes)) < 1.0e-10
+            nodes_on_xz = abs(ele_nodes) < 1.0e-10;
+    
+            % Tet has a face on the XZ plane
+            if sum(nodes_on_xz) == 3
+                cross_section_connectivity(end+1,:) = connectivity(ele,:);
+                cross_section_orig_ele_ind(end+1,:) = ele;
+            
+            % Tet has a segment on the XZ plane
+            elseif sum(nodes_on_xz) == 2
+                nodes_off_xz = ele_nodes(~nodes_on_xz);
+    
+                % Tet stradles XZ
+                if min(nodes_off_xz) < 1.0e-10 && max(nodes_off_xz) > 1.0e-10
+                    cross_section_connectivity(end+1,:) = connectivity(ele,:);
+                    cross_section_orig_ele_ind(end+1,:) = ele;
+                end
+    
+            % Tet has a point on the XZ plane
+            elseif sum(nodes_on_xz) == 1
+                nodes_off_xz = ele_nodes(~nodes_on_xz);
+    
+                % Tet stradles XZ
+                if min(nodes_off_xz) < 1.0e-10 && max(nodes_off_xz) > 1.0e-10
+                    cross_section_connectivity(end+1,:) = connectivity(ele,:);
+                    cross_section_orig_ele_ind(end+1,:) = ele;
+                end
+    
+            end
+    
+        % Tet intersects the XZ plane
+        elseif min(nodes(connectivity(ele,:),2)) < 1.0e-10 && max(nodes(connectivity(ele,:),2)) > -1.0e-10
             cross_section_connectivity(end+1,:) = connectivity(ele,:);
             cross_section_orig_ele_ind(end+1,:) = ele;
+        end
+    
+    end
+    cross_section_orig_node_ind = reshape(cross_section_connectivity,[],1);
+    cross_section_orig_node_ind = unique(cross_section_orig_node_ind);
+    
+    % Gather node-wise stress data in mesh cross section
+    cross_section_node_stress = zeros(length(cross_section_orig_node_ind(:,1)), 6);
+    cross_section_node_von_mises = zeros(length(cross_section_orig_node_ind(:,1)), 1);
+    cross_section_node_principal = zeros(length(cross_section_orig_node_ind(:,1)), 3);
+    for node_ind=1:length(cross_section_orig_node_ind(:,1))
+        for ele = 1:length(cross_section_connectivity(:,1))
         
-        % Tet has a segment on the XZ plane
-        elseif sum(nodes_on_xz) == 2
-            nodes_off_xz = ele_nodes(~nodes_on_xz);
-
-            % Tet stradles XZ
-            if min(nodes_off_xz) < 1.0e-10 && max(nodes_off_xz) > 1.0e-10
-                cross_section_connectivity(end+1,:) = connectivity(ele,:);
-                cross_section_orig_ele_ind(end+1,:) = ele;
+            if sum(cross_section_connectivity(ele,:)==cross_section_orig_node_ind(node_ind))==1
+                
+                % XX
+                if abs(elements_stress(cross_section_orig_ele_ind(ele),1)) > abs(cross_section_node_stress(node_ind, 1))
+                    cross_section_node_stress(node_ind, 1) = elements_stress(cross_section_orig_ele_ind(ele),1);
+                end
+                
+                % YY
+                if abs(elements_stress(cross_section_orig_ele_ind(ele),2)) > abs(cross_section_node_stress(node_ind, 2))
+                    cross_section_node_stress(node_ind, 2) = elements_stress(cross_section_orig_ele_ind(ele),2);
+                end
+        
+                % ZZ
+                if abs(elements_stress(cross_section_orig_ele_ind(ele),3)) > abs(cross_section_node_stress(node_ind, 3))
+                    cross_section_node_stress(node_ind, 3) = elements_stress(cross_section_orig_ele_ind(ele),3);
+                end
+        
+                % XY
+                if abs(elements_stress(cross_section_orig_ele_ind(ele),4)) > abs(cross_section_node_stress(node_ind, 4))
+                    cross_section_node_stress(node_ind, 4) = elements_stress(cross_section_orig_ele_ind(ele),4);
+                end
+        
+                % YZ
+                if abs(elements_stress(cross_section_orig_ele_ind(ele),5)) > abs(cross_section_node_stress(node_ind, 5))
+                    cross_section_node_stress(node_ind, 5) = elements_stress(cross_section_orig_ele_ind(ele),5);
+                end
+        
+                % XZ
+                if abs(elements_stress(cross_section_orig_ele_ind(ele),6)) > abs(cross_section_node_stress(node_ind, 6))
+                    cross_section_node_stress(node_ind, 6) = elements_stress(cross_section_orig_ele_ind(ele),6);
+                end
+        
+                % Von mises
+                if abs(elements_von_mises(cross_section_orig_ele_ind(ele))) > abs(cross_section_node_von_mises(node_ind))
+                    cross_section_node_von_mises(node_ind) = elements_von_mises(cross_section_orig_ele_ind(ele));
+                end
+    
+                % 11
+                if abs(elements_principal(cross_section_orig_ele_ind(ele),1)) > abs(cross_section_node_principal(node_ind, 1))
+                    cross_section_node_principal(node_ind, 1) = elements_principal(cross_section_orig_ele_ind(ele),1);
+                end
+                
+                % 22
+                if abs(elements_principal(cross_section_orig_ele_ind(ele),2)) > abs(cross_section_node_principal(node_ind, 2))
+                    cross_section_node_principal(node_ind, 2) = elements_principal(cross_section_orig_ele_ind(ele),2);
+                end
+        
+                % 33
+                if abs(elements_principal(cross_section_orig_ele_ind(ele),3)) > abs(cross_section_node_principal(node_ind, 3))
+                    cross_section_node_principal(node_ind, 3) = elements_principal(cross_section_orig_ele_ind(ele),3);
+                end
+        
             end
-
-        % Tet has a point on the XZ plane
-        elseif sum(nodes_on_xz) == 1
-            nodes_off_xz = ele_nodes(~nodes_on_xz);
-
-            % Tet stradles XZ
-            if min(nodes_off_xz) < 1.0e-10 && max(nodes_off_xz) > 1.0e-10
-                cross_section_connectivity(end+1,:) = connectivity(ele,:);
-                cross_section_orig_ele_ind(end+1,:) = ele;
-            end
-
         end
-
-    % Tet intersects the XZ plane
-    elseif min(nodes(connectivity(ele,:),2)) < 1.0e-10 && max(nodes(connectivity(ele,:),2)) > -1.0e-10
-        cross_section_connectivity(end+1,:) = connectivity(ele,:);
-        cross_section_orig_ele_ind(end+1,:) = ele;
     end
-
-end
-cross_section_orig_node_ind = reshape(cross_section_connectivity,[],1);
-cross_section_orig_node_ind = unique(cross_section_orig_node_ind);
-
-% Gather node-wise stress data in mesh cross section
-cross_section_node_stress = zeros(length(cross_section_orig_node_ind(:,1)), 6);
-cross_section_node_von_mises = zeros(length(cross_section_orig_node_ind(:,1)), 1);
-cross_section_node_principal = zeros(length(cross_section_orig_node_ind(:,1)), 3);
-for node_ind=1:length(cross_section_orig_node_ind(:,1))
+    
+    % Create vector of cross section nodes and use it to update connectivity indices
+    cross_section_nodes = zeros(length(cross_section_orig_node_ind(:,1)), 3);
+    for node = 1:length(cross_section_orig_node_ind(:,1))
+        cross_section_nodes(node,:) = nodes(cross_section_orig_node_ind(node),:);
+    end
     for ele = 1:length(cross_section_connectivity(:,1))
-    
-        if sum(cross_section_connectivity(ele,:)==cross_section_orig_node_ind(node_ind))==1
-            
-            % XX
-            if abs(elements_stress(cross_section_orig_ele_ind(ele),1)) > abs(cross_section_node_stress(node_ind, 1))
-                cross_section_node_stress(node_ind, 1) = elements_stress(cross_section_orig_ele_ind(ele),1);
-            end
-            
-            % YY
-            if abs(elements_stress(cross_section_orig_ele_ind(ele),2)) > abs(cross_section_node_stress(node_ind, 2))
-                cross_section_node_stress(node_ind, 2) = elements_stress(cross_section_orig_ele_ind(ele),2);
-            end
-    
-            % ZZ
-            if abs(elements_stress(cross_section_orig_ele_ind(ele),3)) > abs(cross_section_node_stress(node_ind, 3))
-                cross_section_node_stress(node_ind, 3) = elements_stress(cross_section_orig_ele_ind(ele),3);
-            end
-    
-            % XY
-            if abs(elements_stress(cross_section_orig_ele_ind(ele),4)) > abs(cross_section_node_stress(node_ind, 4))
-                cross_section_node_stress(node_ind, 4) = elements_stress(cross_section_orig_ele_ind(ele),4);
-            end
-    
-            % YZ
-            if abs(elements_stress(cross_section_orig_ele_ind(ele),5)) > abs(cross_section_node_stress(node_ind, 5))
-                cross_section_node_stress(node_ind, 5) = elements_stress(cross_section_orig_ele_ind(ele),5);
-            end
-    
-            % XZ
-            if abs(elements_stress(cross_section_orig_ele_ind(ele),6)) > abs(cross_section_node_stress(node_ind, 6))
-                cross_section_node_stress(node_ind, 6) = elements_stress(cross_section_orig_ele_ind(ele),6);
-            end
-    
-            % Von mises
-            if abs(elements_von_mises(cross_section_orig_ele_ind(ele))) > abs(cross_section_node_von_mises(node_ind))
-                cross_section_node_von_mises(node_ind) = elements_von_mises(cross_section_orig_ele_ind(ele));
-            end
-
-            % 11
-            if abs(elements_principal(cross_section_orig_ele_ind(ele),1)) > abs(cross_section_node_principal(node_ind, 1))
-                cross_section_node_principal(node_ind, 1) = elements_principal(cross_section_orig_ele_ind(ele),1);
-            end
-            
-            % 22
-            if abs(elements_principal(cross_section_orig_ele_ind(ele),2)) > abs(cross_section_node_principal(node_ind, 2))
-                cross_section_node_principal(node_ind, 2) = elements_principal(cross_section_orig_ele_ind(ele),2);
-            end
-    
-            % 33
-            if abs(elements_principal(cross_section_orig_ele_ind(ele),3)) > abs(cross_section_node_principal(node_ind, 3))
-                cross_section_node_principal(node_ind, 3) = elements_principal(cross_section_orig_ele_ind(ele),3);
-            end
-    
+        for node = 1:4
+            [~,arg_min] = min(abs(cross_section_orig_node_ind - cross_section_connectivity(ele,node)));
+            cross_section_connectivity(ele,node) = arg_min;
         end
     end
-end
-
-% Create vector of cross section nodes and use it to update connectivity indices
-cross_section_nodes = zeros(length(cross_section_orig_node_ind(:,1)), 3);
-for node = 1:length(cross_section_orig_node_ind(:,1))
-    cross_section_nodes(node,:) = nodes(cross_section_orig_node_ind(node),:);
-end
-for ele = 1:length(cross_section_connectivity(:,1))
-    for node = 1:4
-        [~,arg_min] = min(abs(cross_section_orig_node_ind - cross_section_connectivity(ele,node)));
-        cross_section_connectivity(ele,node) = arg_min;
+    
+    % Used for y projection plotting the cross section
+    cross_section_mean_y_val = zeros(length(cross_section_connectivity(:,1)),1);
+    cross_section_min_y_node = zeros(length(cross_section_connectivity(:,1)),1);
+    for ele=1:length(cross_section_connectivity(:,1))
+        cross_section_mean_y_val(ele) = mean(cross_section_nodes(cross_section_connectivity(ele,:),2));
+        [~,arg_min] = min(cross_section_nodes(cross_section_connectivity(ele,:),2));
+        cross_section_min_y_node(ele) = arg_min;
     end
+    [~,cross_section_draw_order] = sort(cross_section_mean_y_val);
 end
-
-% Used for y projection plotting the cross section
-cross_section_mean_y_val = zeros(length(cross_section_connectivity(:,1)),1);
-cross_section_min_y_node = zeros(length(cross_section_connectivity(:,1)),1);
-for ele=1:length(cross_section_connectivity(:,1))
-    cross_section_mean_y_val(ele) = mean(cross_section_nodes(cross_section_connectivity(ele,:),2));
-    [~,arg_min] = min(cross_section_nodes(cross_section_connectivity(ele,:),2));
-    cross_section_min_y_node(ele) = arg_min;
-end
-[~,cross_section_draw_order] = sort(cross_section_mean_y_val);
 
 clear arg_min cross_section_mean_y_val cross_section_orig_ele_ind cross_section_orig_node_ind displacment_sub_vec ele ele_nodes
 clear global_ind_end global_ind_start node node_ind nodes_off_xz nodes_on_xz scale_factor xx yy zz xy yz xz
@@ -554,99 +558,103 @@ if visualize
     set(gcf,'Position',[1098 55 750 1000])
     saveas(gcf,'reaction_mag.png',"png")
     
-    % Von Mises
-    figure(7)
-    colormap jet
-    for tri =1:length(cross_section_draw_order(:,1))
-        ele = cross_section_draw_order(tri);
-        dropped_node = [1,2,3,4] ~= cross_section_min_y_node(ele,:);
-        nodes = cross_section_connectivity(ele,dropped_node);
-        trisurf(nodes, cross_section_nodes(:,1), zeros(length(cross_section_nodes(:,1)), 1), cross_section_nodes(:,3), 1.0e-6*cross_section_node_von_mises);
-        hold on
+    if cross_section
+        % Von Mises
+        figure(7)
+        colormap jet
+        for tri =1:length(cross_section_draw_order(:,1))
+            ele = cross_section_draw_order(tri);
+            dropped_node = [1,2,3,4] ~= cross_section_min_y_node(ele,:);
+            nodes = cross_section_connectivity(ele,dropped_node);
+            trisurf(nodes, cross_section_nodes(:,1), zeros(length(cross_section_nodes(:,1)), 1), cross_section_nodes(:,3), 1.0e-6*cross_section_node_von_mises);
+            hold on
+        end
+        title("Von Mises Stress Y=0",'FontSize',16)
+        c = colorbar('eastoutside');
+        c.Label.String = 'σv (MPA)';
+        c.Label.FontSize = 12;
+        c.FontSize = 12;
+        set(gca,'xticklabel',[])
+        set(gca,'yticklabel',[])
+        set(gca,'zticklabel',[])
+        h=gca;
+        h.XAxis.TickLength = [0 0];
+        h.YAxis.TickLength = [0 0];
+        h.ZAxis.TickLength = [0 0];
+        axis equal;
+        view(0,0);
+        shading interp
+        set(gcf,'Position',[200 55 750 1000])
+        saveas(gcf,'von_mises.png',"png")
+        
+        % First principal
+        figure(8)
+        colormap jet
+        for tri =1:length(cross_section_draw_order(:,1))
+            ele = cross_section_draw_order(tri);
+            dropped_node = [1,2,3,4] ~= cross_section_min_y_node(ele,:);
+            nodes = cross_section_connectivity(ele,dropped_node);
+            trisurf(nodes, cross_section_nodes(:,1), zeros(length(cross_section_nodes(:,1)), 1), cross_section_nodes(:,3), 1.0e-6*cross_section_node_principal(:,1));
+            hold on
+        end
+        title("First Principal Stress Y=0",'FontSize',16)
+        c = colorbar('eastoutside');
+        c.Label.String = 'σ1 (MPA)';
+        c.Label.FontSize = 12;
+        c.FontSize = 12;
+        set(gca,'xticklabel',[])
+        set(gca,'yticklabel',[])
+        set(gca,'zticklabel',[])
+        h=gca;
+        h.XAxis.TickLength = [0 0];
+        h.YAxis.TickLength = [0 0];
+        h.ZAxis.TickLength = [0 0];
+        axis equal;
+        view(0,0);
+        shading interp
+        set(gcf,'Position',[1098 55 750 1000])
+        saveas(gcf,'first_principal.png',"png")
+        
+        % Third principal
+        figure(9)
+        colormap jet
+        for tri =1:length(cross_section_draw_order(:,1))
+            ele = cross_section_draw_order(tri);
+            dropped_node = [1,2,3,4] ~= cross_section_min_y_node(ele,:);
+            nodes = cross_section_connectivity(ele,dropped_node);
+            trisurf(nodes, cross_section_nodes(:,1), zeros(length(cross_section_nodes(:,1)), 1), cross_section_nodes(:,3), 1.0e-6*cross_section_node_principal(:,3));
+            hold on
+        end
+        title("Third Principal Stress Y=0",'FontSize',16)
+        c = colorbar('eastoutside');
+        c.Label.String = 'σ3 (MPA)';
+        c.Label.FontSize = 12;
+        c.FontSize = 12;
+        set(gca,'xticklabel',[])
+        set(gca,'yticklabel',[])
+        set(gca,'zticklabel',[])
+        h=gca;
+        h.XAxis.TickLength = [0 0];
+        h.YAxis.TickLength = [0 0];
+        h.ZAxis.TickLength = [0 0];
+        
+        axis equal;
+        view(0,0);
+        shading interp
+        set(gcf,'Position',[200 55 750 1000])
+        saveas(gcf,'third_principal.png',"png")
     end
-    title("Von Mises Stress Y=0",'FontSize',16)
-    c = colorbar('eastoutside');
-    c.Label.String = 'σv (MPA)';
-    c.Label.FontSize = 12;
-    c.FontSize = 12;
-    set(gca,'xticklabel',[])
-    set(gca,'yticklabel',[])
-    set(gca,'zticklabel',[])
-    h=gca;
-    h.XAxis.TickLength = [0 0];
-    h.YAxis.TickLength = [0 0];
-    h.ZAxis.TickLength = [0 0];
-    axis equal;
-    view(0,0);
-    shading interp
-    set(gcf,'Position',[200 55 750 1000])
-    saveas(gcf,'von_mises.png',"png")
-    
-    % First principal
-    figure(8)
-    colormap jet
-    for tri =1:length(cross_section_draw_order(:,1))
-        ele = cross_section_draw_order(tri);
-        dropped_node = [1,2,3,4] ~= cross_section_min_y_node(ele,:);
-        nodes = cross_section_connectivity(ele,dropped_node);
-        trisurf(nodes, cross_section_nodes(:,1), zeros(length(cross_section_nodes(:,1)), 1), cross_section_nodes(:,3), 1.0e-6*cross_section_node_principal(:,1));
-        hold on
-    end
-    title("First Principal Stress Y=0",'FontSize',16)
-    c = colorbar('eastoutside');
-    c.Label.String = 'σ1 (MPA)';
-    c.Label.FontSize = 12;
-    c.FontSize = 12;
-    set(gca,'xticklabel',[])
-    set(gca,'yticklabel',[])
-    set(gca,'zticklabel',[])
-    h=gca;
-    h.XAxis.TickLength = [0 0];
-    h.YAxis.TickLength = [0 0];
-    h.ZAxis.TickLength = [0 0];
-    axis equal;
-    view(0,0);
-    shading interp
-    set(gcf,'Position',[1098 55 750 1000])
-    saveas(gcf,'first_principal.png',"png")
-    
-    % Third principal
-    figure(9)
-    colormap jet
-    for tri =1:length(cross_section_draw_order(:,1))
-        ele = cross_section_draw_order(tri);
-        dropped_node = [1,2,3,4] ~= cross_section_min_y_node(ele,:);
-        nodes = cross_section_connectivity(ele,dropped_node);
-        trisurf(nodes, cross_section_nodes(:,1), zeros(length(cross_section_nodes(:,1)), 1), cross_section_nodes(:,3), 1.0e-6*cross_section_node_principal(:,3));
-        hold on
-    end
-    title("Third Principal Stress Y=0",'FontSize',16)
-    c = colorbar('eastoutside');
-    c.Label.String = 'σ3 (MPA)';
-    c.Label.FontSize = 12;
-    c.FontSize = 12;
-    set(gca,'xticklabel',[])
-    set(gca,'yticklabel',[])
-    set(gca,'zticklabel',[])
-    h=gca;
-    h.XAxis.TickLength = [0 0];
-    h.YAxis.TickLength = [0 0];
-    h.ZAxis.TickLength = [0 0];
-    
-    axis equal;
-    view(0,0);
-    shading interp
-    set(gcf,'Position',[200 55 750 1000])
-    saveas(gcf,'third_principal.png',"png")
 end
 
 % Save
-save('strain.mat','elements_strain');
-save('stress.mat','elements_stress');
-save('von_mises.mat','elements_von_mises');
-save('principal.mat','elements_principal');
-save('displacement.mat','dimensional_displacement');
-save('reaction.mat','reaction_load');
+if save_data
+    save('strain.mat','elements_strain');
+    save('stress.mat','elements_stress');
+    save('von_mises.mat','elements_von_mises');
+    save('principal.mat','elements_principal');
+    save('displacement.mat','dimensional_displacement');
+    save('reaction.mat','reaction_load');
+end
 
 % Readout
 n_elements = n_elements
@@ -655,7 +663,7 @@ max_first = 1.0e-6*max(elements_principal(:,1))
 min_third = 1.0e-6*min(elements_principal(:,3))
 max_displacement = max(displacement_mag)*1e6
 
-clear dropped_node nodes tri ele min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading s show_load show_fixed make_sparse remove_outliers
+clear dropped_node nodes tri ele min_z max_z node p0 p1 c h x_fixed_scatter y_fixed_scatter z_fixed_scatter norm_node_loading s show_load show_fixed make_sparse cross_section save
 
 
 %% Helper functions

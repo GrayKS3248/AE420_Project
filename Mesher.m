@@ -23,9 +23,9 @@ thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 20;
-num_ring = 1;
-num_theta = 5;
+num_height = 138;
+num_ring = 6;
+num_theta = 43;
 
 % Render options
 render_mesh = false;

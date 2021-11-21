@@ -10,9 +10,9 @@ r_shank = 3.0;
 r_body = 2.5;
 
 % Lengths
-l_head = 3.75;
-l_shank_transition = 0.50;
-l_shank = 3.0;
+l_head = 2.75;
+l_shank_transition = 2.0;
+l_shank = 2.5;
 l_body = 42.0;
 l_tip = 5.0;
 
@@ -23,9 +23,9 @@ thread_width = 1.25;
 thread_crest = 0.5;
 
 % Mesh
-num_height = 55;
-num_ring = 2;
-num_theta = 9;
+num_height = 20;
+num_ring = 1;
+num_theta = 5;
 
 % Render options
 render_mesh = false;
@@ -368,7 +368,7 @@ if render_mesh
         xlim([-1.05*max([r_head,r_shank,r_body]), 1.05*max([r_head,r_shank,r_body])])
         ylim([-1.05*max([r_head,r_shank,r_body]), 1.05*max([r_head,r_shank,r_body])])
         zlim([-0.05*total_length, 1.05*total_length])
-        view(rad2deg(2.0*pi - rotations*2.0*pi*((i-1)/(num_elements-1)))+5.0,80-20*((i-num_elements-1)/600));
+        view(rad2deg(2.0*pi - rotations*2.0*pi*((i-1)/(num_elements-1)))+5.0,80-50*((i-num_elements-1)/600));
         set(gca,'XTickLabel',[]);
         set(gca,'YTickLabel',[]);
         set(gca,'ZTickLabel',[]);

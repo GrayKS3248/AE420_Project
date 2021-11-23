@@ -1,0 +1,18 @@
+%% Parameters
+% Radii 
+r_head = 6.5;
+r_shank = 3.0;
+r_body = 2.5;
+
+% Lengths
+l_head = 2.75;
+l_shank_transition = 3.0;
+l_shank = 1.5;
+l_body = 42.0;
+l_tip = 5.0;
+
+% Thread
+thread_number = 0.5;
+thread_depth = 0.75;
+thread_width = 1.25;
+thread_crest = 0.5;

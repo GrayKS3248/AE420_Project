@@ -25,7 +25,7 @@ node_types_that_are_fixed_in_z = [1, 2, 3, 4];
 node_indices_that_are_fixed_in_x = [];
 node_indices_that_are_fixed_in_y = [];
 node_indices_that_are_fixed_in_z = [];
-fixed_node_z_range = [5.0, 15.9];  %mm
+fixed_node_z_range = [5.0, 47.0];  %mm
 
 
 %% Simulation and visualization options

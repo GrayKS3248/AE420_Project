@@ -11,8 +11,8 @@ r_body = 2.5;
 
 % Lengths
 l_head = 2.75;
-l_shank_transition = 2.0;
-l_shank = 2.5;
+l_shank_transition = 3.0;
+l_shank = 1.5;
 l_body = 42.0;
 l_tip = 5.0;
 
@@ -21,6 +21,9 @@ thread_number = 0.5;
 thread_depth = 0.75;
 thread_width = 1.25;
 thread_crest = 0.5;
+
+% Options
+fillet_shank = false;
 
 % Mesh
 num_height = 138;
@@ -48,7 +51,8 @@ arg = struct('rh',r_head,...
     'tn',thread_number,...
     'td',thread_depth,...
     'tw',thread_width,...
-    'tc',thread_crest);
+    'tc',thread_crest,...
+    'fillet_shank',fillet_shank);
 
 
 %% Generate nodes
@@ -425,6 +429,9 @@ function [r, node_type] = get_r(theta,h,arg)
     elseif h>=shank_2_shank_transition && h<=shank_transition_2_head
         node_type = 6;
         loc_in_section = (h - shank_2_shank_transition) / (shank_transition_2_head - shank_2_shank_transition);
+        if arg.fillet_shank
+            loc_in_section = 3.0*loc_in_section*loc_in_section - 2.0*loc_in_section*loc_in_section*loc_in_section;
+        end
         r = arg.rs*(1.0-loc_in_section) + arg.rh*loc_in_section;
         
     % Shank
